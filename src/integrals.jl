@@ -1,25 +1,11 @@
 
-
-# module Integrals
-
 import Base: exponent
-
-# all exports for GTOs
-# export BasisFunction, GTO
-# export center,exponent,shell,ltot
-# export Ax,Ay,Az,lx,ly,lz
-# export overlap,kinetic,nuclear,repulsion
-# # additional exports for CGTOs
-# export CGTO
-# export exponents,primitives,coefs,nprims,norms
 
 
 """Abstract type defining a basis function."""
 abstract type BasisFunction end
 
-
 ############## GTO ###############
-
 
 """Concrete type defining a Cartesian GTO, i.e. a CGF."""
 struct GTO <: BasisFunction
@@ -156,39 +142,6 @@ function nuclear(Ga::GTO, Gb::GTO, C::Vector{T}) where {T<:Real}
             for v = 0:m+n
                 Emn = Etij(v, m, n, Kαβ[3], RPA[3], RPB[3], α, β)
                 vne +=  Eij * Ekl * Emn * Rtuv(t, u, v, 0, p, RPC)
-            end
-        end
-    end
-
-    return 2.0*π*vne/p
-end
-
-
-"""Returns the nuclear attraction energy integral of the distribution Ωab from center C."""
-function nuclear_gen(Ga::GTO, Gb::GTO, C::Vector{T}) where {T<:Real}
-
-    # precomputing all required quantities
-    α = exponent(Ga); β = exponent(Gb)
-    (i,k,m) = shell(Ga); (j,l,n) = shell(Gb)
-    A = center(Ga); B = center(Gb)
-    p = α + β
-    P = (α.*A + β.*B) .* (1.0/(α + β))
-    RAB = A - B; RPA = P - A; RPB = P - B; RPC = P - C
-    μ = (α * β)/(α + β)
-    Kαβ = exp.(-μ .* RAB.^2)
-
-    vne = 0.0
-    for t = 0:i+j
-        # @inbounds Eij = Etij(t, i, j, Kαβ[1], RPA[1], RPB[1], α, β)
-        Eij = Etij(t, i, j, Kαβ[1], RPA[1], RPB[1], α, β)
-        for u = 0:k+l
-            # @inbounds Ekl = Etij(u, k, l, Kαβ[2], RPA[2], RPB[2], α, β)
-            Ekl = Etij(u, k, l, Kαβ[2], RPA[2], RPB[2], α, β)
-            for v = 0:m+n
-                # @inbounds Emn = Etij(v, m, n, Kαβ[3], RPA[3], RPB[3], α, β)
-                Emn = Etij(v, m, n, Kαβ[3], RPA[3], RPB[3], α, β)
-                # @fastmath vne +=  Eij * Ekl * Emn * Rtuv(t, u, v, 0, p, RPC)
-                vne +=  Eij * Ekl * Emn * Rtuv_gen(Val{t}, Val{u}, Val{v}, 0, p, RPC)
             end
         end
     end
@@ -369,7 +322,6 @@ end
 
 ### auxiliary functions ###
 
-
 """Returns the double factorial n!! of an integer number."""
 function dfactorial(n::Int)
     if n == 0
@@ -415,15 +367,6 @@ function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Re
 end
 
 
-# using Memoize
-# @memoize function Rtuv(t::Int, u::Int, v::Int, n::Int, p::Real, RPC::Vector{Float64})::Float64
-
-# """Returns the integral of an Hermite Gaussian divided by the Coulomb operator."""
-# function Rtuv{T<:Real}(t::Int, u::Int, v::Int, n::Int, p::Real, RPC::Vector{T})
-
-### Note that for t+u+v odd -> Rtuv is zero!!
-## Note also that there are symmetries in t, u and v that can be used
-
 """Returns the integral of an Hermite Gaussian divided by the Coulomb operator."""
 function Rtuv(t::Int, u::Int, v::Int, n::Int, p::Real, RPC::Vector{T}) where {T<:Real}
     if t == u == v == 0
@@ -453,42 +396,6 @@ function Rtuv(t::Int, u::Int, v::Int, n::Int, p::Real, RPC::Vector{T}) where {T<
 end
 
 
-function Rtuv_exp(t::Int, u::Int, v::Int, n, p, RPC)
-    
-    nn = :($n+1)
-
-    if t == u == v == 0
-        return :((-2.0 * $p)^$n * boys($n, $p * sum($RPC.^2)))
-    elseif u == v == 0
-        if t > 1
-            return :($(t-1) * $(Rtuv_exp(t-2, u, v, nn, p, RPC)) +
-                    $RPC[1] * $(Rtuv_exp(t-1, u, v, nn, p, RPC)))
-        else
-            return :($RPC[1] * $(Rtuv_exp(t-1, u, v, nn, p, RPC)))
-        end
-    elseif v == 0
-        if u > 1
-            return :($(u-1) * $(Rtuv_exp(t, u-2, v, nn, p, RPC)) +
-                    $RPC[2] * $(Rtuv_exp(t, u-1, v, nn, p, RPC)))
-        else
-            return :($RPC[2] * $(Rtuv_exp(t, u-1, v, nn, p ,RPC)))
-        end
-    else
-        if v > 1
-            return :($(v-1) * $(Rtuv_exp(t, u, v-2, nn, p, RPC)) +
-                    $RPC[3] * $(Rtuv_exp(t, u, v-1, nn, p, RPC)))
-        else
-            return :($RPC[3] * $(Rtuv_exp(t, u, v-1, nn, p, RPC)))
-        end
-    end
-end
-
-
-@generated function Rtuv_gen(::Type{Val{t}}, ::Type{Val{u}}, ::Type{Val{v}},
-                            n::Int, p::Real, RPC::Vector{Float64}) where {t,u,v}
-    return Rtuv_exp(t, u, v, :n, :p, :RPC)
-end
-
-
 # contains boys function
 include("utils.jl")
+
