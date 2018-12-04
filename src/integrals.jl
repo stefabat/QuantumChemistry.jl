@@ -291,7 +291,7 @@ function nuclear(μ::CGTO, ν::CGTO, C::AbstractVector{T}) where {T<:Real}
     V = 0.0
     for a in 1:nprims(μ)
         for b in 1:nprims(ν)
-            V += Nμ[a] * Nν[b] * dμ[a] * dν[b] * nuclear_gen(Gμ[a],Gν[b],C)
+            V += Nμ[a] * Nν[b] * dμ[a] * dν[b] * nuclear(Gμ[a],Gν[b],C)
         end
     end
     return V
