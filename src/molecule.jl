@@ -1,6 +1,4 @@
 
-# include("basis.jl")
-
 
 """Type representing an atom."""
 struct Atom

@@ -122,7 +122,7 @@ end
 
 
 """Returns the nuclear attraction energy integral of the distribution Ωab from center C."""
-function nuclear(Ga::GTO, Gb::GTO, C::Vector{T}) where {T<:Real}
+function attraction(Ga::GTO, Gb::GTO, C::Vector{T}) where {T<:Real}
 
     # precomputing all required quantities
     α = exponent(Ga); β = exponent(Gb)
@@ -285,13 +285,13 @@ end
 Returns the nuclear attraction integral between two contracted GTOs and
 the nucleus centered at `C`.
 """
-function nuclear(μ::CGTO, ν::CGTO, C::AbstractVector{T}) where {T<:Real}
+function attraction(μ::CGTO, ν::CGTO, C::AbstractVector{T}) where {T<:Real}
     Gμ = primitives(μ); dμ = coefs(μ); Nμ = norms(μ)
     Gν = primitives(ν); dν = coefs(ν); Nν = norms(ν)
     V = 0.0
     for a in 1:nprims(μ)
         for b in 1:nprims(ν)
-            V += Nμ[a] * Nν[b] * dμ[a] * dν[b] * nuclear(Gμ[a],Gν[b],C)
+            V += Nμ[a] * Nν[b] * dμ[a] * dν[b] * attraction(Gμ[a],Gν[b],C)
         end
     end
     return V
