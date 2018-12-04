@@ -1,16 +1,17 @@
 
 
-module Integrals
+# module Integrals
 
+import Base: exponent
 
 # all exports for GTOs
-export BasisFunction, GTO
-export center,exponent,shell,ltot
-export Ax,Ay,Az,lx,ly,lz
-export overlap,kinetic,nuclear,repulsion
-# additional exports for CGTOs
-export CGTO
-export exponents,primitives,coefs,nprims,norms
+# export BasisFunction, GTO
+# export center,exponent,shell,ltot
+# export Ax,Ay,Az,lx,ly,lz
+# export overlap,kinetic,nuclear,repulsion
+# # additional exports for CGTOs
+# export CGTO
+# export exponents,primitives,coefs,nprims,norms
 
 
 """Abstract type defining a basis function."""
@@ -84,8 +85,8 @@ end
 
 
 """Returns the overlap integral <Ga|Gb> of two Cartesian Gaussian functions."""
-function overlap{T<:Real}(α::Real, ikm::Tuple{Int,Int,Int}, A::Vector{T},
-                          β::Real, jln::Tuple{Int,Int,Int}, B::Vector{T})
+function overlap(α::Real, ikm::Tuple{Int,Int,Int}, A::Vector{T},
+                 β::Real, jln::Tuple{Int,Int,Int}, B::Vector{T}) where {T<:Real}
 
     # precomputing all required quantities
     μ = (α * β)/(α + β)
@@ -135,7 +136,7 @@ end
 
 
 """Returns the nuclear attraction energy integral of the distribution Ωab from center C."""
-function nuclear{T<:Real}(Ga::GTO, Gb::GTO, C::Vector{T})
+function nuclear(Ga::GTO, Gb::GTO, C::Vector{T}) where {T<:Real}
 
     # precomputing all required quantities
     α = exponent(Ga); β = exponent(Gb)
@@ -164,7 +165,7 @@ end
 
 
 """Returns the nuclear attraction energy integral of the distribution Ωab from center C."""
-function nuclear_gen{T<:Real}(Ga::GTO, Gb::GTO, C::Vector{T})
+function nuclear_gen(Ga::GTO, Gb::GTO, C::Vector{T}) where {T<:Real}
 
     # precomputing all required quantities
     α = exponent(Ga); β = exponent(Gb)
@@ -204,9 +205,9 @@ function repulsion(Ga::GTO, Gb::GTO, Gc::GTO, Gd::GTO)
     (i1,k1,m1) = shell(Ga); (j1,l1,n1) = shell(Gb)
     A = center(Ga); B = center(Gb); RAB = A-B
     # precompute quantities for electron 1
+    P = (α.*A + β.*B) ./ (α + β)
     p = α + β
-    P = (α.*A + β.*B) .* 1.0/(α + β)
-    Kαβ = exp.(-p.*RAB.^2)
+    Kαβ = exp.(-α*β/(α+β).*RAB.^2)
     RPA = P-A; RPB = P-B
 
     # extract info from gaussians for electron 2
@@ -214,9 +215,9 @@ function repulsion(Ga::GTO, Gb::GTO, Gc::GTO, Gd::GTO)
     (i2,k2,m2) = shell(Gc); (j2,l2,n2) = shell(Gd)
     C = center(Gc); D = center(Gd); RCD = C-D
     # precompute quantities for electron 2
+    Q = (γ.*C + δ.*D) ./ (γ + δ)
     q = γ + δ
-    Q = (γ.*C + δ.*D) .* 1.0/(γ + δ)
-    Kγδ = exp.(-q.*RCD.^2)
+    Kγδ = exp.(-γ*δ/(γ+δ).*RCD.^2)
     RQC = Q-C; RQD = Q-D
 
     # precompute quantities for auxiliary integral R
@@ -261,16 +262,16 @@ end
 
 
 """Construct a `CGTO` centered on `A` with angular momenutm `l`."""
-function CGTO{T<:Real}(A::AbstractVector{T}, l::Tuple{Int,Int,Int},
-                       α::AbstractVector{T}, d::AbstractVector{T})
+function CGTO(A::AbstractVector{T}, l::Tuple{Int,Int,Int},
+              α::AbstractVector{T}, d::AbstractVector{T}) where {T<:Real}
 
     # number of coefs and exponents must match
-    assert(length(d) == length(α))
+    @assert(length(d) == length(α))
     n = length(d)
 
     # initialize data vector
-    funcs = Vector{GTO}(n)
-    norms = Vector{Float64}(n)
+    funcs = Vector{GTO}(undef,n)
+    norms = Vector{Float64}(undef,n)
 
     for i in 1:n
         funcs[i] = GTO(A,α[i],l)
@@ -288,7 +289,7 @@ center(cgto::CGTO) = cgto.funcs[1].A
 Ax(cgto::CGTO) = Ax(cgto.funcs[1])
 Ay(cgto::CGTO) = Ay(cgto.funcs[1])
 Az(cgto::CGTO) = Az(cgto.funcs[1])
-shell(cgto::CGTO) = ijk(cgto.funcs[1])
+shell(cgto::CGTO) = shell(cgto.funcs[1])
 ltot(cgto::CGTO) = ltot(cgto.funcs[1])
 lx(cgto::CGTO) = lx(cgto.funcs[1])
 ly(cgto::CGTO) = ly(cgto.funcs[1])
@@ -424,9 +425,9 @@ end
 ## Note also that there are symmetries in t, u and v that can be used
 
 """Returns the integral of an Hermite Gaussian divided by the Coulomb operator."""
-function Rtuv{T<:Real}(t::Int, u::Int, v::Int, n::Int, p::Real, RPC::Vector{T})
+function Rtuv(t::Int, u::Int, v::Int, n::Int, p::Real, RPC::Vector{T}) where {T<:Real}
     if t == u == v == 0
-        return (-2.0*p)^n * boys(n,p*norm(RPC)^2)
+        return (-2.0*p)^n * boys(n,p*abs(sum(RPC.*RPC)))
     elseif u == v == 0
         if t > 1
             return  (t-1)*Rtuv(t-2, u, v, n+1, p, RPC) +
@@ -457,7 +458,7 @@ function Rtuv_exp(t::Int, u::Int, v::Int, n, p, RPC)
     nn = :($n+1)
 
     if t == u == v == 0
-        return :((-2.0 * $p)^$n * boys($n, $p * norm($RPC)^2))
+        return :((-2.0 * $p)^$n * boys($n, $p * sum($RPC.^2)))
     elseif u == v == 0
         if t > 1
             return :($(t-1) * $(Rtuv_exp(t-2, u, v, nn, p, RPC)) +
@@ -489,17 +490,5 @@ end
 end
 
 
+# contains boys function
 include("utils.jl")
-
-"""Returns the Boys fucntion F_n(x)."""
-# function boys(n::Int, x::Real)
-#     return _gsl_sf_hyperg_1F1(n+0.5, n+1.5, -x) / (2.0*n+1.0)
-# end
-
-# function _gsl_sf_hyperg_1F1(a::AbstractFloat, b::AbstractFloat, x::AbstractFloat)
-#     return ccall( (:gsl_sf_hyperg_1F1, "/usr/lib/libgsl.so"),
-#                Cdouble, (Cdouble, Cdouble, Cdouble), a, b, x)
-# end
-
-end # end module
-
