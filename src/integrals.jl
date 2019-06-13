@@ -231,13 +231,16 @@ function CGTO(A::AbstractVector{T}, l::Tuple{Int,Int,Int},
         norms[i] = normalization(funcs[i])
     end
 
+    temp_cgto = CGTO(funcs, d, norms)
+    norms .*= 1.0/sqrt(overlap(temp_cgto))
+
     return CGTO(funcs, d, norms)
 end
 
 
 ### some getter functions ###
 primitives(cgto::CGTO) = cgto.funcs
-nprims(cgto::CGTO) = length(cgto.funcs)
+nprimitives(cgto::CGTO) = length(cgto.funcs)
 center(cgto::CGTO) = cgto.funcs[1].A
 Ax(cgto::CGTO) = Ax(cgto.funcs[1])
 Ay(cgto::CGTO) = Ay(cgto.funcs[1])
@@ -247,10 +250,16 @@ ltot(cgto::CGTO) = ltot(cgto.funcs[1])
 lx(cgto::CGTO) = lx(cgto.funcs[1])
 ly(cgto::CGTO) = ly(cgto.funcs[1])
 lz(cgto::CGTO) = lz(cgto.funcs[1])
-exponents(cgto::CGTO) = map(x->alpha(x),primitives(cgto))
+exponents(cgto::CGTO) = map(x->exponent(x),primitives(cgto))
 coefs(cgto::CGTO) = cgto.coefs
 norms(cgto::CGTO) = cgto.norms
 ###
+
+
+"""Returns the self-overlap integral of a contracted GTO."""
+function overlap(μ::CGTO)
+    return overlap(μ,μ)
+end
 
 
 """Returns the overlap integral between two contracted GTOs."""
@@ -258,8 +267,8 @@ function overlap(μ::CGTO, ν::CGTO)
     Gμ = primitives(μ); dμ = coefs(μ); Nμ = norms(μ)
     Gν = primitives(ν); dν = coefs(ν); Nν = norms(ν)
     S = 0.0
-    for a in 1:nprims(μ)
-        for b in 1:nprims(ν)
+    for a in 1:nprimitives(μ)
+        for b in 1:nprimitives(ν)
             S += Nμ[a] * Nν[b] * dμ[a] * dν[b] * overlap(Gμ[a],Gν[b])
         end
     end
@@ -272,8 +281,8 @@ function kinetic(μ::CGTO, ν::CGTO)
     Gμ = primitives(μ); dμ = coefs(μ); Nμ = norms(μ)
     Gν = primitives(ν); dν = coefs(ν); Nν = norms(ν)
     T = 0.0
-    for a in 1:nprims(μ)
-        for b in 1:nprims(ν)
+    for a in 1:nprimitives(μ)
+        for b in 1:nprimitives(ν)
             T += Nμ[a] * Nν[b] * dμ[a] * dν[b] * kinetic(Gμ[a],Gν[b])
         end
     end
@@ -289,8 +298,8 @@ function attraction(μ::CGTO, ν::CGTO, C::AbstractVector{T}) where {T<:Real}
     Gμ = primitives(μ); dμ = coefs(μ); Nμ = norms(μ)
     Gν = primitives(ν); dν = coefs(ν); Nν = norms(ν)
     V = 0.0
-    for a in 1:nprims(μ)
-        for b in 1:nprims(ν)
+    for a in 1:nprimitives(μ)
+        for b in 1:nprimitives(ν)
             V += Nμ[a] * Nν[b] * dμ[a] * dν[b] * attraction(Gμ[a],Gν[b],C)
         end
     end
@@ -305,10 +314,10 @@ function repulsion(μ::CGTO, ν::CGTO, λ::CGTO, σ::CGTO)
     Gλ = primitives(λ); dλ = coefs(λ); Nλ = norms(λ)
     Gσ = primitives(σ); dσ = coefs(σ); Nσ = norms(σ)
     V = 0.0
-    for a in 1:nprims(μ)
-        for b in 1:nprims(ν)
-            for c in 1:nprims(λ)
-                for d in 1:nprims(σ)
+    for a in 1:nprimitives(μ)
+        for b in 1:nprimitives(ν)
+            for c in 1:nprimitives(λ)
+                for d in 1:nprimitives(σ)
                     V += Nμ[a] * Nν[b] * Nλ[c] * Nσ[d] *
                          dμ[a] * dν[b] * dλ[c] * dσ[d] *
                          repulsion(Gμ[a],Gν[b],Gλ[c],Gσ[d])

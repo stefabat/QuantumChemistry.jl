@@ -53,8 +53,13 @@ end
 ###
 
 
-"""Simple constructor for `Molecule` type."""
+"""
+Simple constructor for `Molecule` type.
+Geometry expected in Angstrom.    
+"""
 function Molecule(coords::Matrix, charge::Int = 0)
+
+    # input sanity check
     if size(coords,2) != 4
         error("expected a matrix with format ['Atom' x y z;...] ")
     end
@@ -63,7 +68,7 @@ function Molecule(coords::Matrix, charge::Int = 0)
     atoms = Vector{Atom}(undef,natoms)
 
     for i = 1:natoms
-        atoms[i] = Atom(coords[i,1],convert(Vector{Float64},coords[i,2:4]))
+        atoms[i] = Atom(coords[i,1],tobohr*coords[i,2:4])
     end
 
     return Molecule(atoms, charge)
@@ -108,7 +113,6 @@ function readxyz(xyzfile::String)
 end
 
 
-
 # periodic table
 ptable = Dict("H"  => Dict("Z"=>1, "Ar"=>  1.008),
               "He" => Dict("Z"=>2, "Ar"=>  4.003),
@@ -120,6 +124,11 @@ ptable = Dict("H"  => Dict("Z"=>1, "Ar"=>  1.008),
               "O"  => Dict("Z"=>8, "Ar"=> 16.000),
               "F"  => Dict("Z"=>9, "Ar"=> 19.000),
               "Ne" => Dict("Z"=>10,"Ar"=> 20.180),
+              "Mg" => Dict("Z"=>12,"Ar"=> 24.305),
+              "Ti" => Dict("Z"=>22,"Ar"=> 47.867),
               "Br" => Dict("Z"=>35,"Ar"=> 79.904),
               "I"  => Dict("Z"=>53,"Ar"=>126.904))
 
+# using Psi4 physical constants
+toang = 0.52917720859
+tobohr = 1.8897261328856432 # == 1.0/toang

@@ -20,7 +20,7 @@ dimension(basis::AOBasis) = length(basis.cgto)
 contractions(basis::AOBasis) = basis.cgto
 ###
 
-using JSON: JSON.Parser.parsefile
+using JSON: Parser.parsefile
 
 """Load a basis set file stored in JSON format."""
 loadbasis(filename::String) = parsefile(filename)
@@ -44,9 +44,9 @@ function AOBasis(basisname::String, mol::Molecule)
             if fn["angular"] == "s"
                 push!(basis,CGTO(xyz(atom),(0,0,0),α,d))
             elseif fn["angular"] == "p"
-                push!(basis,CGTO(xyz(atom),(1,0,0),α,d))
-                push!(basis,CGTO(xyz(atom),(0,1,0),α,d))
                 push!(basis,CGTO(xyz(atom),(0,0,1),α,d))
+                push!(basis,CGTO(xyz(atom),(0,1,0),α,d))
+                push!(basis,CGTO(xyz(atom),(1,0,0),α,d))
             elseif fn["angular"] == "d"
                 push!(basis,CGTO(xyz(atom),(2,0,0),α,d))
                 push!(basis,CGTO(xyz(atom),(0,2,0),α,d))
@@ -78,9 +78,10 @@ function overlap(basis::AOBasis)
     M = dimension(basis)
     AOs = contractions(basis)
     S = zeros(M,M)
-    for (i,χi) in enumerate(AOs)
-        for (j,χj) in enumerate(AOs)
-            S[i,j] = overlap(χi,χj)
+    # permutational symmetry Sij = Sji
+    for i = 1:M
+        for j = 1:i
+            S[i,j] = S[j,i] = overlap(AOs[i],AOs[j])
         end
     end
     return S
@@ -92,9 +93,10 @@ function kinetic(basis::AOBasis)
     M = dimension(basis)
     AOs = contractions(basis)
     T = zeros(M,M)
-    for (i,χi) in enumerate(AOs)
-        for (j,χj) in enumerate(AOs)
-            T[i,j] = kinetic(χi,χj)
+    # permutational symmetry Tij = Tji
+    for i = 1:M
+        for j = 1:i
+            T[i,j] = T[j,i] = kinetic(AOs[i],AOs[j])
         end
     end
     return T
@@ -106,11 +108,13 @@ function attraction(basis::AOBasis, mol::Molecule)
     M = dimension(basis)
     AOs = contractions(basis)
     Vne = zeros(M,M)
-    for (i,χi) in enumerate(AOs)
-        for (j,χj) in enumerate(AOs)
+    # permutational symmetry Vij = Vji
+    for i = 1:M
+        for j = 1:i
             for I in atoms(mol)
-                Vne[i,j] += attraction(χi,χj,xyz(I))*(-Z(I))
+                Vne[i,j] += attraction(AOs[i],AOs[j],xyz(I))*(-Z(I))
             end
+            Vne[j,i] = Vne[i,j]
         end
     end
     return Vne
@@ -121,12 +125,17 @@ end
 function repulsion(basis::AOBasis)
     M = dimension(basis)
     AOs = contractions(basis)
-    Vee = zeros(M,M,M,M)
-    for (i,χi) in enumerate(AOs)
-        for (j,χj) in enumerate(AOs)
-            for (k,χk) in enumerate(AOs)
-                for (l,χl) in enumerate(AOs)
-                    Vee[i,j,k,l] = repulsion(χi,χj,χk,χl)
+    Vee = zeros((M*M-M)÷2+M,(M*M-M)÷2+M)
+    for i = 1:M
+        for j = 1:i
+            ij = index(i,j)
+            for k = 1:i
+                for l = 1:k
+                    kl = index(k,l)
+                    if ij >= kl
+                        # println(i,j,k,l)
+                        Vee[ij,kl] = Vee[kl,ij] = repulsion(AOs[i],AOs[j],AOs[k],AOs[l])
+                    end
                 end
             end
         end
@@ -135,11 +144,13 @@ function repulsion(basis::AOBasis)
 end
 
 
+"""Return compound index of the ERI tensor."""
+index(i::Int, j::Int) = i >= j ? (i*i - i) ÷ 2 + j : (j*j - j) ÷ 2 + i
+
+
 """Compute the nuclear-nuclear repulsion for a given `Molecule`."""
 function nuclear(mol::Molecule)
- 
     Vnn = 0.0
-
     for (I,Inuc) in enumerate(atoms(mol))
         for (J,Jnuc) in enumerate(atoms(mol))
             if I<J
@@ -150,3 +161,25 @@ function nuclear(mol::Molecule)
 
     return Vnn
 end
+
+
+"""
+Compute the electron-electron repulsion tensor Vee of a given `AOBasis`.
+Use only for test purposes on small systems, EXTREMELY SLOW!
+"""
+function repulsion_debug(basis::AOBasis)
+    M = dimension(basis)
+    AOs = contractions(basis)
+    Vee = zeros(M,M,M,M)
+    for i = 1:M
+        for j = 1:M
+            for k = 1:M
+                for l = 1:M
+                    Vee[i,j,k,l] = repulsion(AOs[i],AOs[j],AOs[k],AOs[l])
+                end
+            end
+        end
+    end
+    return Vee
+end
+
