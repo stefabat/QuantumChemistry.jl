@@ -1,23 +1,15 @@
 
-include("integrals.jl")
-
-using LinearAlgebra: norm
-
-
-"""Supertype of all types of basis sets."""
-abstract type AbstractBasis end
-
 
 """Type representing an AO basis."""
-struct AOBasis <: AbstractBasis
+struct BasisSet
     name::String
-    cgto::Vector{CGTO}
+    shells::Vector{CGF}
 end
 
 ### some getter functions ###
 name(basis::AOBasis) = basis.name
-dimension(basis::AOBasis) = length(basis.cgto)
-contractions(basis::AOBasis) = basis.cgto
+dimension(basis::AOBasis) = length(basis.cgf)
+contractions(basis::AOBasis) = basis.cgf
 ###
 
 using JSON: Parser.parsefile
@@ -25,6 +17,7 @@ using JSON: Parser.parsefile
 """Load a basis set file stored in JSON format."""
 loadbasis(filename::String) = parsefile(filename)
 
+include("molecule.jl")
 
 # TODO: generalize it to higher angular momenta
 # TODO: group functions by angular momentum instead of atoms?
@@ -35,36 +28,36 @@ function AOBasis(basisname::String, mol::Molecule)
     basisdata = loadbasis("src/basis/$basisname.json")
 
     # TODO: find a way to preallocate this?
-    basis = Vector{CGTO}()
+    basis = Vector{CGF}()
 
     for atom in atoms(mol)
         for fn in basisdata[name(atom)]
             α = convert(Vector{Float64},fn["prim"])
             d = convert(Vector{Float64},fn["cont"][1])
             if fn["angular"] == "s"
-                push!(basis,CGTO(xyz(atom),(0,0,0),α,d))
+                push!(basis,CGF(xyz(atom),(0,0,0),α,d))
             elseif fn["angular"] == "p"
-                push!(basis,CGTO(xyz(atom),(0,0,1),α,d))
-                push!(basis,CGTO(xyz(atom),(0,1,0),α,d))
-                push!(basis,CGTO(xyz(atom),(1,0,0),α,d))
+                push!(basis,CGF(xyz(atom),(0,0,1),α,d))
+                push!(basis,CGF(xyz(atom),(0,1,0),α,d))
+                push!(basis,CGF(xyz(atom),(1,0,0),α,d))
             elseif fn["angular"] == "d"
-                push!(basis,CGTO(xyz(atom),(2,0,0),α,d))
-                push!(basis,CGTO(xyz(atom),(0,2,0),α,d))
-                push!(basis,CGTO(xyz(atom),(0,0,2),α,d))
-                push!(basis,CGTO(xyz(atom),(1,1,0),α,d))
-                push!(basis,CGTO(xyz(atom),(1,0,1),α,d))
-                push!(basis,CGTO(xyz(atom),(0,1,1),α,d))
+                push!(basis,CGF(xyz(atom),(2,0,0),α,d))
+                push!(basis,CGF(xyz(atom),(0,2,0),α,d))
+                push!(basis,CGF(xyz(atom),(0,0,2),α,d))
+                push!(basis,CGF(xyz(atom),(1,1,0),α,d))
+                push!(basis,CGF(xyz(atom),(1,0,1),α,d))
+                push!(basis,CGF(xyz(atom),(0,1,1),α,d))
             elseif fn["angular"] == "f"
-                push!(basis,CGTO(xyz(atom),(3,0,0),α,d))
-                push!(basis,CGTO(xyz(atom),(0,3,0),α,d))
-                push!(basis,CGTO(xyz(atom),(0,0,3),α,d))
-                push!(basis,CGTO(xyz(atom),(2,1,0),α,d))
-                push!(basis,CGTO(xyz(atom),(2,0,1),α,d))
-                push!(basis,CGTO(xyz(atom),(1,2,0),α,d))
-                push!(basis,CGTO(xyz(atom),(0,2,1),α,d))
-                push!(basis,CGTO(xyz(atom),(1,0,2),α,d))
-                push!(basis,CGTO(xyz(atom),(0,1,2),α,d))
-                push!(basis,CGTO(xyz(atom),(1,1,1),α,d))
+                push!(basis,CGF(xyz(atom),(3,0,0),α,d))
+                push!(basis,CGF(xyz(atom),(0,3,0),α,d))
+                push!(basis,CGF(xyz(atom),(0,0,3),α,d))
+                push!(basis,CGF(xyz(atom),(2,1,0),α,d))
+                push!(basis,CGF(xyz(atom),(2,0,1),α,d))
+                push!(basis,CGF(xyz(atom),(1,2,0),α,d))
+                push!(basis,CGF(xyz(atom),(0,2,1),α,d))
+                push!(basis,CGF(xyz(atom),(1,0,2),α,d))
+                push!(basis,CGF(xyz(atom),(0,1,2),α,d))
+                push!(basis,CGF(xyz(atom),(1,1,1),α,d))
             end
         end
     end

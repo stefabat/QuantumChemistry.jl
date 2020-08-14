@@ -1,4 +1,3 @@
-
 #
 # Integrals are tested against values obtained with Psi4
 # using the libint library on an Arch Linux x86_64 machine,
