@@ -2,10 +2,10 @@
 
 # module Integrals
 
-include("mcmurchie-davidson.jl")
+# include("mcmurchie-davidson.jl")
 # using .McMurchieDavidson
 
-include("basisfunctions.jl")
+# include("basisfunctions.jl")
 # using .BasisFunctions
 
 
@@ -33,6 +33,7 @@ angular = Dict(
 )
 
 
+# Cartesian to spherical index
 function c2s_index(i,j,k)
     index = findall(x->x==(i,j,k),angular[i+j+k])
     if length(index) == 1
@@ -274,44 +275,32 @@ end
 
 #--------------------------------- Shell -----------------------------------#
 
-"""Returns the overlap integral matrix S of two GTO shells."""
-function overlap(Ga::Shell,Gb::Shell)
-    
+function overlap(shell_a::Shell,shell_b::Shell)
+
     # precomputing all required quantities
-    α = exponent(Ga); β = exponent(Gb)
-    RA = center(Ga); RB = center(Gb)
-    μ = (α * β)/(α + β)
-    RP = (RA.*α .+ RB.*β)./(α + β)
-    RAB = RA .- RB; RPA = RP .- RA; RPB = RP .- RB
-    Kαβ = exp.(-μ.*RAB.^2)
-    
-    la = ltot(Ga); lb = ltot(Gb)
-    Sx = zeros(la+1,lb+1)
-    Sy = zeros(la+1,lb+1)
-    Sz = zeros(la+1,lb+1)
-    Nal = (la+1)*(la+2)÷2
-    Nbl = (lb+1)*(lb+2)÷2
-    S = zeros(Nal,Nbl)
-    
-    # loop over Cartesian quantum numbers
-    for a = 0:la
-        for b = 0:lb
-            @inbounds Sx[a+1,b+1] = Etij(0, a, b, Kαβ[1], RPA[1], RPB[1], α, β)
-            @inbounds Sy[a+1,b+1] = Etij(0, a, b, Kαβ[2], RPA[2], RPB[2], α, β)
-            @inbounds Sz[a+1,b+1] = Etij(0, a, b, Kαβ[3], RPA[3], RPB[3], α, β)
-        end
-    end
-    
-    for (a,(i,k,m)) in enumerate(angular[la])
-        for (b,(j,l,n)) in enumerate(angular[lb])
-            S[a,b] = Sx[i+1,j+1] * Sy[k+1,l+1] * Sz[m+1,n+1]
+    # α = shell_a.exponents
+    # β = shell_b.exponents
+    la = shell_a.angular_momentum
+    lb = shell_b.angular_momentum
+    da = shell_a.coefficients
+    db = shell_b.coefficients
+    Ra = shell_a.center
+    Rb = shell_b.center
+
+    # loop over primitives
+    for (b,β) in enumerate(shell_b.exponents)
+        for (a,α) in enumerate(shell_a.exponents)
+            S += da[a] * db[b] * overlap(α, la, Ra, β, lb, β)
         end
     end
 
-    # S = ((π / (α + β) )^1.5) .* S
+    T = ...
+    # transform to spherical harmonics
+    return T'*S*T
 
-    return ((π / (α + β) )^1.5) .* S
+
 end
+
 
 
 """Returns the kinetic energy integral matrix T of two GTO shells."""

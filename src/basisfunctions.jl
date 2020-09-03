@@ -3,6 +3,7 @@
 # module BasisFunctions
 
 using LinearAlgebra: norm
+using StaticArrays
 import Base: exponent
 
 # type export
@@ -22,9 +23,9 @@ abstract type BasisFunction end
 
 """Concrete type defining a primitive Gaussian function."""
 struct PGF <: BasisFunction
-    R::NTuple{3,Float64}    # center of the PGF
+    R::SVector{3,Float64}    # center of the PGF
     α::Float64              # exponent
-    l::NTuple{3,Int}        # Cartesian quantum numbers
+    l::SVector{3,Int}        # Cartesian quantum numbers
 end
 
 center(pgf::PGF)   = pgf.R
@@ -53,7 +54,7 @@ end
 
 
 """Construct a `CGF` centered on `R` with angular momenutm `l`."""
-function CGF(R::NTuple{3,Float64}, l::Tuple{Int,Int,Int},
+function CGF(R::SVector{3,Float64}, l::SVector{3,Int},
              α::AbstractVector{T}, d::AbstractVector{T}) where {T<:Real}
 
     # number of coefs and exponents must match
@@ -95,76 +96,6 @@ ltot(cgf::CGF) = ltot(cgf.funcs[1])
 #------------------------------------------------------------------------------#
 
 
-#----------------------------------- Shell ------------------------------------#
-
-# A shell is a set of PGFs with the same angular momentum, the same center R
-# and the same exponent α. Since only the angular momentum is defined, we do not
-# have to differentiate between Cartesian and Spherical-harmonics Gaussian
-# functions. For example, a p shell describes the px, py and pz PGFs.
-
-"""Concrete type representing PGF shell."""
-struct Shell
-    R::NTuple{3,Float64}   # center of the Shell
-    α::Float64             # exponent
-    l::Int                 # angular momentum
-end
-
-center(pshell::Shell)   = pshell.R
-exponent(pshell::Shell) = pshell.α
-ltot(pshell::Shell)     = pshell.l
-
-Rx(pshell::Shell) = pshell.R[1]
-Ry(pshell::Shell) = pshell.R[2]
-Rz(pshell::Shell) = pshell.R[3]
-#------------------------------------------------------------------------------#
-
-
-#----------------------------- Contracted Shell -------------------------------#
-
-"""Concrete type representing PGF shell."""
-struct ContractedShell
-    shells::Vector{Shell}       # primitive Shells
-    coefs::Vector{Float64}      # contraction coefs
-    norms::Vector{Float64}      # normalization factors
-end
-
-"""Construct a `ContractedShell` centered on `R` with angular momenutm `l`."""
-function ContractedShell(R::NTuple{3,Float64}, l::Int,
-             α::AbstractVector{T}, d::AbstractVector{T}) where {T<:Real}
-
-    # number of coefs and exponents must match
-    @assert(length(d) == length(α))
-    n = length(d)
-
-    # initialize data vector
-    shells = Vector{Shell}(undef,n)
-    norms = Vector{Float64}(undef,n)
-
-    for i in 1:n
-        shells[i] = Shell(R,α[i],l)
-        # norms[i] = normalization(funcs[i])
-        norms[i] = 1.0
-    end
-
-    # temp_cgto = CGF(funcs, d, norms)
-    # norms .*= 1.0/sqrt(overlap(temp_cgto))
-
-    return ContractedShell(shells, d, norms)
-end
-
-primitives(cshell::ContractedShell) = cshell.shells
-nprimitives(cshell::ContractedShell) = length(cshell.shells)
-coefs(cshell::ContractedShell) = cshell.coefs
-norms(cshell::ContractedShell) = cshell.norms
-
-center(cshell::ContractedShell) = center(cshell.shells[1])
-exponents(cshell::ContractedShell) = map(x->exponent(x),cshell.shells)
-ltot(cshell::Shell) = ltot(cshell.shells[1])
-
-Rx(cshell::ContractedShell) = Rx(cshell.shells[1])
-Ry(cshell::ContractedShell) = Ry(cshell.shells[1])
-Rz(cshell::ContractedShell) = Rz(cshell.shells[1])
-#------------------------------------------------------------------------------#
 
 
 

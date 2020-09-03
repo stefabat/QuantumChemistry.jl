@@ -1,27 +1,112 @@
 
+using StaticArrays
 # module McMurchieDavidson
 
+angular = Dict(
+0=>[(0,0,0)],
+1=>[(1,0,0),(0,1,0),(0,0,1)],
+2=>[(2,0,0),(1,1,0),(1,0,1),
+(0,2,0),(0,1,1),(0,0,2)],
+3=>[(3,0,0),(2,1,0),(2,0,1),
+(1,2,0),(1,1,1),(1,0,2),
+(0,3,0),(0,2,1),(0,1,2),
+(0,0,3)],
+4=>[(4,0,0),(3,1,0),(3,0,1),
+(2,2,0),(2,1,1),(2,0,2),
+(1,3,0),(1,2,1),(1,1,2),
+(1,0,3),(0,4,0),(0,3,1),
+(0,2,2),(0,1,3),(0,0,4)],
+5=>[(5,0,0),(4,1,0),(4,0,1),
+(3,2,0),(3,1,1),(3,0,2),
+(2,3,0),(2,2,1),(2,1,2),
+(2,0,3),(1,4,0),(1,3,1),
+(1,2,2),(1,1,3),(1,0,4),
+(0,5,0),(0,4,1),(0,3,2),
+(0,2,3),(0,1,4),(0,0,5)]
+)
 
 
-
-
-"""Compute the overlap integral <Ga|Gb> of two Cartesian PGFs."""
-function overlap(α::Real, ikm::NTuple{3,Int}, RA::NTuple{3,Float64},
-                 β::Real, jln::NTuple{3,Int}, RB::NTuple{3,Float64})
-
+"""Returns the overlap integral matrix S between two primitive shells."""
+function overlap(α::Real, la::Int, RA::SVector{3,Float64},
+                 β::Real, lb::Int, RB::SVector{3,Float64})
+     
     # precomputing all required quantities
     μ = (α * β)/(α + β)
     RP = (RA.*α .+ RB.*β)./(α + β)
     RAB = RA .- RB; RPA = RP .- RA; RPB = RP .- RB
     Kαβ = exp.(-μ.*RAB.^2)
+    
+    # number of Cartesian primitive functions in shell
+    Nla = (la+1)*(la+2)÷2
+    Nlb = (lb+1)*(lb+2)÷2
+    S = zeros(Nla,Nlb)
+    
+    for (b,(jx,jy,jz)) in enumerate(angular[lb])
+        for (a,(ix,iy,iz)) in enumerate(angular[la])
+            Ex = Etij(0, ix, jx, Kαβ[1], RPA[1], RPB[1], α, β)
+            Ey = Etij(0, iy, jy, Kαβ[2], RPA[2], RPB[2], α, β)
+            Ez = Etij(0, iz, jz, Kαβ[3], RPA[3], RPB[3], α, β)
+            S[a,b] = Ex * Ey * Ez
+        end
+    end
 
-    # calculate overlaps in the 3 Cartesian directions
-    @inbounds Sx = Etij(0, ikm[1], jln[1], Kαβ[1], RPA[1], RPB[1], α, β)
-    @inbounds Sy = Etij(0, ikm[2], jln[2], Kαβ[2], RPA[2], RPB[2], α, β)
-    @inbounds Sz = Etij(0, ikm[3], jln[3], Kαβ[3], RPA[3], RPB[3], α, β)
-
-    return Sx * Sy * Sz * (π / (α + β) )^1.5
+    return ((π / (α + β) )^1.5) .* S
 end
+
+
+"""Returns the overlap integral matrix S between two shells."""
+function overlap_good(α::Real, la::Int, RA::SVector{3,Float64},
+                 β::Real, lb::Int, RB::SVector{3,Float64})
+     
+    # precomputing all required quantities
+    μ = (α * β)/(α + β)
+    RP = (RA.*α .+ RB.*β)./(α + β)
+    RAB = RA .- RB; RPA = RP .- RA; RPB = RP .- RB
+    Kαβ = exp.(-μ.*RAB.^2)
+    
+    Sx = zeros(la+1,lb+1)
+    Sy = zeros(la+1,lb+1)
+    Sz = zeros(la+1,lb+1)
+    Nal = (la+1)*(la+2)÷2
+    Nbl = (lb+1)*(lb+2)÷2
+    S = zeros(Nal,Nbl)
+    
+    # loop over Cartesian quantum numbers
+    for a = 0:la
+        for b = 0:lb
+            @inbounds Sx[a+1,b+1] = Etij(0, a, b, Kαβ[1], RPA[1], RPB[1], α, β)
+            @inbounds Sy[a+1,b+1] = Etij(0, a, b, Kαβ[2], RPA[2], RPB[2], α, β)
+            @inbounds Sz[a+1,b+1] = Etij(0, a, b, Kαβ[3], RPA[3], RPB[3], α, β)
+        end
+    end
+    
+    for (a,(i,k,m)) in enumerate(angular[la])
+        for (b,(j,l,n)) in enumerate(angular[lb])
+            S[a,b] = Sx[i+1,j+1] * Sy[k+1,l+1] * Sz[m+1,n+1]
+        end
+    end
+
+    return ((π / (α + β) )^1.5) .* S
+end
+
+
+# """Compute the overlap integral <Ga|Gb> of two Cartesian PGFs."""
+# function overlap(α::Real, ikm::NTuple{3,Int}, RA::NTuple{3,Float64},
+#                  β::Real, jln::NTuple{3,Int}, RB::NTuple{3,Float64})
+
+#     # precomputing all required quantities
+#     μ = (α * β)/(α + β)
+#     RP = (RA.*α .+ RB.*β)./(α + β)
+#     RAB = RA .- RB; RPA = RP .- RA; RPB = RP .- RB
+#     Kαβ = exp.(-μ.*RAB.^2)
+
+#     # calculate overlaps in the 3 Cartesian directions
+#     @inbounds Sx = Etij(0, ikm[1], jln[1], Kαβ[1], RPA[1], RPB[1], α, β)
+#     @inbounds Sy = Etij(0, ikm[2], jln[2], Kαβ[2], RPA[2], RPB[2], α, β)
+#     @inbounds Sz = Etij(0, ikm[3], jln[3], Kαβ[3], RPA[3], RPB[3], α, β)
+
+#     return Sx * Sy * Sz * (π / (α + β) )^1.5
+# end
 
 
 """Compute the kinetic energy integral -0.5*<Ga|∇^2|Gb> of two Cartesian PGFs."""
