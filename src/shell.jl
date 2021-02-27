@@ -1,7 +1,4 @@
 
-using StaticArrays
-
-
 # A shell is a set of atomic orbitals with the same angular momentum and center.
 # For instance, a p shell contains three atomic orbitals: px, py and pz.
 # The atomic orbitals composing a shell are assumed to be contracted Gaussian
@@ -11,7 +8,7 @@ using StaticArrays
 """
 Concrete type representing an atomic orbital shell.
 `M` is the number of primitive functions.
-`N` is the number of contracted functions.    
+`N` is the number of contracted functions.
 """
 struct Shell{M,N}
     center::SVector{3,Float64}   # center of the Shell
@@ -23,7 +20,7 @@ end
 
 """Construct a `Shell` centered on `R` with angular momenutm `l`."""
 function Shell(center::AbstractVector{T}, angular_momentum::Int,
-            coefficients::AbstractMatrix{T}, exponents::AbstractVector{T}) where {T<:Number}
+            coefficients::AbstractArray{T}, exponents::AbstractVector{T}) where {T<:Number}
 
     # extract sizes
     M=size(coefficients,1)

@@ -1,12 +1,5 @@
 
 
-# module Geometry
-
-using StaticArrays
-using DelimitedFiles
-using JSON.Parser: parsefile
-
-
 """Type representing an element."""
 struct Element
     name::String
@@ -57,19 +50,19 @@ end
 function Base.getindex(mol::Molecule, index)
     return mol.atoms[index]
 end
-  
+
 function Base.length(mol::Molecule)
     return length(mol.atoms)
 end
-  
+
 function Base.iterate(mol::Molecule)
     return iterate(mol.atoms)
 end
-  
+
 function Base.iterate(mol::Molecule, state)
     return iterate(mol.atoms, state)
 end
-  
+
 function Base.push!(mol::Molecule, atom::Atom)
     return push!(mol.atoms, atom)
 end
@@ -86,7 +79,7 @@ end
 
 """
 Simple constructor for `Molecule` type.
-Geometry expected in Angstrom.    
+Geometry expected in Angstrom.
 """
 function Molecule(coords::Matrix, charge::Int = 0)
 

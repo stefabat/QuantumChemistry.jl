@@ -1,10 +1,4 @@
 
-using JSON.Parser: parsefile
-using StaticArrays
-
-# include("molecule.jl")
-
-
 """Type representing an atomic orbital basis."""
 struct Basis
     name::String
@@ -26,7 +20,7 @@ end
 
 function dimension(basis::Basis)
     m = 0
-    n = 0 
+    n = 0
     for shell in get_shells(basis)
         l = get_am(shell)
         m += get_num_primitives(shell)   * (2*l+1)
@@ -64,7 +58,7 @@ function Basis(name::String, molecule::Molecule)
             # so, first we "splat it" to a matrix of strings and then we parse each element to float
             d = parse.(Float64,hcat(shell["coefficients"]...))
 
-            # add the shell to the 
+            # add the shell to the
             push!(shells,Shell(R,l,d,α))
         end
     end

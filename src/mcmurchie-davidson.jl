@@ -1,52 +1,134 @@
 
-using StaticArrays
-# module McMurchieDavidson
 
-angular = Dict(
-0=>[(0,0,0)],
-1=>[(1,0,0),(0,1,0),(0,0,1)],
-2=>[(2,0,0),(1,1,0),(1,0,1),
-(0,2,0),(0,1,1),(0,0,2)],
-3=>[(3,0,0),(2,1,0),(2,0,1),
-(1,2,0),(1,1,1),(1,0,2),
-(0,3,0),(0,2,1),(0,1,2),
-(0,0,3)],
-4=>[(4,0,0),(3,1,0),(3,0,1),
-(2,2,0),(2,1,1),(2,0,2),
-(1,3,0),(1,2,1),(1,1,2),
-(1,0,3),(0,4,0),(0,3,1),
-(0,2,2),(0,1,3),(0,0,4)],
-5=>[(5,0,0),(4,1,0),(4,0,1),
-(3,2,0),(3,1,1),(3,0,2),
-(2,3,0),(2,2,1),(2,1,2),
-(2,0,3),(1,4,0),(1,3,1),
-(1,2,2),(1,1,3),(1,0,4),
-(0,5,0),(0,4,1),(0,3,2),
-(0,2,3),(0,1,4),(0,0,5)]
-)
+"""
+    hermite_expansion(imax::Int, jmax::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
+
+Compute the Hermite expansion coefficients for a 1-dimensional Cartesian overlap distribution
+using a two-term recursion relation.
+"""
+function hermite_expansion(imax::Int, jmax::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
+
+    # compute Gaussian product exponent
+    p = α + β
+
+    # initialize array of expansion coefficients
+    E = OffsetArray(zeros(imax+jmax+1,imax+1,jmax+1),-1,-1,-1)
+
+    # enter recursion
+    for j = 0:jmax
+        for i = 0:imax
+            for t = i+j:-1:0
+                if t > 0
+                    if i > 0
+                        E[t,i,j] += (1/(2*p*t)) * i * E[t-1, i-1, j]
+                    end
+                    if j > 0
+                        E[t,i,j] += (1/(2*p*t)) * j * E[t-1, i, j-1]
+                    end
+                else
+                    if i == j == 0
+                        E[t,i,j] = Kαβx
+                    elseif j == 0
+                        E[t,i,j] = XPA * E[0, i-1, j] + E[1, i-1, j]
+                    else
+                        E[t,i,j] = XPB * E[0, i, j-1] + E[1, i, j-1]
+                    end
+                end
+            end
+        end
+    end
+
+    return E
+end
 
 
-"""Returns the overlap integral matrix S between two primitive shells."""
-function overlap(α::Real, la::Int, RA::SVector{3,Float64},
-                 β::Real, lb::Int, RB::SVector{3,Float64})
-     
+
+"""
+    hermite_integral(tmax::Int, umax::Int, vmax::Int, p::Real, RPC::StaticVector{3})
+
+Compute the integral of an Hermite Gaussian divided by the Coulomb operator.
+"""
+function hermite_integral(tmax::Int, umax::Int, vmax::Int, p::Real, RPC::StaticVector{3})
+
+    # initialize array
+    R = OffsetArray(zeros(tmax+umax+vmax+1,tmax+1,umax+1,vmax+1),-1,-1,-1,-1)
+
+    # compute auxiliary integrals Rⁿ₀₀₀
+    for n = 0:tmax+umax+vmax
+        R[n,0,0,0] = (-2.0*p)^n * boys(n,p*RPC⋅RPC)
+    end
+
+    # transfer angular momentum n to t
+    for t=0:max-1
+        for n=0:tmax+umax+vmax-t-1
+            R[n,t+1,0,0] = RPC[1]*R[n+1, t, 0, 0]
+            if t > 0
+                R[n,t+1,0,0] += t*R[n+1, t-1, 0, 0]
+            end
+        end
+    end
+
+    # transfer angular momentum n to u
+    for u=0:umax-1
+        for t=0:tmax
+            for n=0:tmax+umax+vmax-t-u-1
+                R[n,t,u+1,0] = RPC[2]*R[n+1, t, u, 0]
+                if u > 0
+                    R[n,t,u+1,0] += u*R[n+1, t, u-1, 0]
+                end
+            end
+        end
+    end
+
+    # transfer angular momentum n to v
+    for v=0:vmax-1
+        for u=0:umax
+            for t=0:tmax
+                for n=0:tmax+umax+vmax-t-u-v-1
+                    R[n,t,u,v+1] = RPC[3]*R[n+1, t, u, v]
+                    if v > 0
+                    R[n,t,u,v+1] += v*R[n+1, t, u, v-1]
+                    end
+                end
+            end
+        end
+    end
+
+    return R
+
+end
+
+
+
+
+
+"""
+    overlap(α::Real, la::Int, RA::AbstractVector{Real}, β::Real, lb::Int, RB::AbstractVector{Real})
+
+Compute the overlap integral matrix between two primitive Cartesian shells centered on
+`RA` and `RB`, with exponents `α` and `β` and angular momenta `la` and `lb`.
+The centers `RA` and `RB` are expected to be 3-dimensional vectors.
+"""
+function overlap(α::Real, la::Int, RA::AbstractVector{T},
+                 β::Real, lb::Int, RB::AbstractVector{T}) where {T<:Real}
+
     # precomputing all required quantities
     μ = (α * β)/(α + β)
     RP = (RA.*α .+ RB.*β)./(α + β)
     RAB = RA .- RB; RPA = RP .- RA; RPB = RP .- RB
     Kαβ = exp.(-μ.*RAB.^2)
-    
+
     # number of Cartesian primitive functions in shell
     Nla = (la+1)*(la+2)÷2
     Nlb = (lb+1)*(lb+2)÷2
     S = zeros(Nla,Nlb)
-    
-    for (b,(jx,jy,jz)) in enumerate(angular[lb])
-        for (a,(ix,iy,iz)) in enumerate(angular[la])
+
+    for (b,(jx,jy,jz)) in enumerate(get_ijk(lb))
+        for (a,(ix,iy,iz)) in enumerate(get_ijk(la))
             Ex = Etij(0, ix, jx, Kαβ[1], RPA[1], RPB[1], α, β)
             Ey = Etij(0, iy, jy, Kαβ[2], RPA[2], RPB[2], α, β)
             Ez = Etij(0, iz, jz, Kαβ[3], RPA[3], RPB[3], α, β)
-            S[a,b] = Ex * Ey * Ez
+            @inbounds S[a,b] = Ex * Ey * Ez
         end
     end
 
@@ -54,59 +136,6 @@ function overlap(α::Real, la::Int, RA::SVector{3,Float64},
 end
 
 
-"""Returns the overlap integral matrix S between two shells."""
-function overlap_good(α::Real, la::Int, RA::SVector{3,Float64},
-                 β::Real, lb::Int, RB::SVector{3,Float64})
-     
-    # precomputing all required quantities
-    μ = (α * β)/(α + β)
-    RP = (RA.*α .+ RB.*β)./(α + β)
-    RAB = RA .- RB; RPA = RP .- RA; RPB = RP .- RB
-    Kαβ = exp.(-μ.*RAB.^2)
-    
-    Sx = zeros(la+1,lb+1)
-    Sy = zeros(la+1,lb+1)
-    Sz = zeros(la+1,lb+1)
-    Nal = (la+1)*(la+2)÷2
-    Nbl = (lb+1)*(lb+2)÷2
-    S = zeros(Nal,Nbl)
-    
-    # loop over Cartesian quantum numbers
-    for a = 0:la
-        for b = 0:lb
-            @inbounds Sx[a+1,b+1] = Etij(0, a, b, Kαβ[1], RPA[1], RPB[1], α, β)
-            @inbounds Sy[a+1,b+1] = Etij(0, a, b, Kαβ[2], RPA[2], RPB[2], α, β)
-            @inbounds Sz[a+1,b+1] = Etij(0, a, b, Kαβ[3], RPA[3], RPB[3], α, β)
-        end
-    end
-    
-    for (a,(i,k,m)) in enumerate(angular[la])
-        for (b,(j,l,n)) in enumerate(angular[lb])
-            S[a,b] = Sx[i+1,j+1] * Sy[k+1,l+1] * Sz[m+1,n+1]
-        end
-    end
-
-    return ((π / (α + β) )^1.5) .* S
-end
-
-
-# """Compute the overlap integral <Ga|Gb> of two Cartesian PGFs."""
-# function overlap(α::Real, ikm::NTuple{3,Int}, RA::NTuple{3,Float64},
-#                  β::Real, jln::NTuple{3,Int}, RB::NTuple{3,Float64})
-
-#     # precomputing all required quantities
-#     μ = (α * β)/(α + β)
-#     RP = (RA.*α .+ RB.*β)./(α + β)
-#     RAB = RA .- RB; RPA = RP .- RA; RPB = RP .- RB
-#     Kαβ = exp.(-μ.*RAB.^2)
-
-#     # calculate overlaps in the 3 Cartesian directions
-#     @inbounds Sx = Etij(0, ikm[1], jln[1], Kαβ[1], RPA[1], RPB[1], α, β)
-#     @inbounds Sy = Etij(0, ikm[2], jln[2], Kαβ[2], RPA[2], RPB[2], α, β)
-#     @inbounds Sz = Etij(0, ikm[3], jln[3], Kαβ[3], RPA[3], RPB[3], α, β)
-
-#     return Sx * Sy * Sz * (π / (α + β) )^1.5
-# end
 
 
 """Compute the kinetic energy integral -0.5*<Ga|∇^2|Gb> of two Cartesian PGFs."""
@@ -258,11 +287,13 @@ end
 # using Memoize
 
 """
-Compute the Hermite expansion coefficients for a 1D Cartesian overlap distribution
+    Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
+
+Compute the Hermite expansion coefficients for a 1-dimensional Cartesian overlap distribution
 using a two-term recursion relation.
 """
-# @memoize function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
 function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
+# @memoize function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
 
     # compute overlap exponent
     p = α + β
@@ -287,22 +318,7 @@ function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Re
 end
 
 
-# function Etij(i⃗::NTuple{3,Int}, j⃗::NTuple{3,Int}, Kαβ::NTuple{3,Real},
-#               RPA::NTuple{3,Real}, RPB::NTuple{3,Real}, α::Real, β::Real)
 
-    
-#     for tx = 0:i⃗[1]+j⃗[1]
-#         Ex = Etij(tx, i⃗[1], j⃗[1], Kαβ[1], RPA[1], RPB[1], α, β)
-#         for ty = 0:i⃗[2]+j⃗[2]
-#             Ey = Etij(tx, i⃗[2], j⃗[2], Kαβ[2], RPA[2], RPB[2], α, β)
-#             for tz = 0:i⃗[3]+j⃗[3]
-#                 Ez = Etij(tz, i⃗[3], j⃗[3], Kαβ[3], RPA[3], RPB[3], α, β)
-#                 E += Ex * Ey * Ez
-#             end
-#         end
-#     end
-
-# end
 
 """Compute the integral of an Hermite Gaussian divided by the Coulomb operator."""
 function Rtuv(t::Int, u::Int, v::Int, n::Int, p::Real, RPC::NTuple{3,Float64})
@@ -333,5 +349,27 @@ function Rtuv(t::Int, u::Int, v::Int, n::Int, p::Real, RPC::NTuple{3,Float64})
 end
 
 
+"""
+    get_ijk(l::Int)
 
-# end # of Module
+Return an array with the Cartesian quantum numbers summing to angular momentum `l`.
+"""
+function get_ijk(l::Int)
+    # number of angular momentum projections
+    Nijk = (l+1)*(l+2)÷2
+    # preallocate vector of ml values
+    ijk = Vector{NTuple{3,Int}}(undef, Nijk)
+    # initialize counter
+    it = 1
+    for a = 1:l+1
+        for b = 1:a
+            i = l + 1 - a
+            j = a - b
+            k = b - 1
+            ijk[it] = (i, j, k)
+            it +=1
+        end
+    end
+    return ijk
+end
+
