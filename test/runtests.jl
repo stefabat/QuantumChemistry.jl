@@ -1,8 +1,8 @@
 
-using JQC
+using QuantumChemistry
 using Test
 
-tests = ["integrals"]
+tests = ["mcmurchie-davidson"]
 
 for test in tests
     include("$test.jl")
