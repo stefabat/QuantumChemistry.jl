@@ -1,18 +1,16 @@
 
 
 """
-    hermite_expansion(imax::Int, jmax::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
+    hermite_expansion(imax::Int, jmax::Int, Kαβ::Real, PA::Real, PB::Real, p::Real)
 
 Compute the Hermite expansion coefficients for a 1-dimensional Cartesian overlap distribution
 using a two-term recursion relation.
 """
-function hermite_expansion(imax::Int, jmax::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
-
-    # compute Gaussian product exponent
-    p = α + β
+function hermite_expansion(imax::Int, jmax::Int, Kαβ::Real, PA::Real, PB::Real, p::Real)
 
     # initialize array of expansion coefficients
-    E = OffsetArray(zeros(imax+jmax+1,imax+1,jmax+1),-1,-1,-1)
+    # E = OffsetArray(zeros(imax+jmax+1,imax+1,jmax+1),-1,-1,-1)
+    E = zeros(imax+jmax+1,imax+1,jmax+1)
 
     # enter recursion
     for j = 0:jmax
@@ -20,18 +18,23 @@ function hermite_expansion(imax::Int, jmax::Int, Kαβx::Real, XPA::Real, XPB::R
             for t = i+j:-1:0
                 if t > 0
                     if i > 0
-                        E[t,i,j] += (1/(2*p*t)) * i * E[t-1, i-1, j]
+                        # E[t,i,j] += (1/(2*p*t)) * i * E[t-1, i-1, j]
+                        E[t+1,i+1,j+1] += (1/(2*p*t)) * i * E[t, i, j+1]
                     end
                     if j > 0
-                        E[t,i,j] += (1/(2*p*t)) * j * E[t-1, i, j-1]
+                        # E[t,i,j] += (1/(2*p*t)) * j * E[t-1, i, j-1]
+                        E[t+1,i+1,j+1] += (1/(2*p*t)) * j * E[t, i+1, j]
                     end
                 else
                     if i == j == 0
-                        E[t,i,j] = Kαβx
+                        # E[t,i,j] = Kαβ
+                        E[t+1,i+1,j+1] = Kαβ
                     elseif j == 0
-                        E[t,i,j] = XPA * E[0, i-1, j] + E[1, i-1, j]
+                        # E[t,i,j] = PA * E[0, i-1, j] + E[1, i-1, j]
+                        E[t+1,i+1,j+1] = PA * E[1, i, j+1] + E[2, i, j+1]
                     else
-                        E[t,i,j] = XPB * E[0, i, j-1] + E[1, i, j-1]
+                        # E[t,i,j] = PB * E[0, i, j-1] + E[1, i, j-1]
+                        E[t+1,i+1,j+1] = PB * E[1, i+1, j] + E[2, i+1, j]
                     end
                 end
             end
@@ -48,7 +51,7 @@ end
 
 Compute the integral of an Hermite Gaussian divided by the Coulomb operator.
 """
-function hermite_integral(tmax::Int, umax::Int, vmax::Int, p::Real, RPC::StaticVector{3})
+function hermite_integral(tmax::Int, umax::Int, vmax::Int, p::Real, RPC::AbstractVector)
 
     # initialize array
     R = OffsetArray(zeros(tmax+umax+vmax+1,tmax+1,umax+1,vmax+1),-1,-1,-1,-1)
@@ -113,6 +116,7 @@ function overlap(α::Real, la::Int, RA::AbstractVector{T},
                  β::Real, lb::Int, RB::AbstractVector{T}) where {T<:Real}
 
     # precomputing all required quantities
+    p = α + β
     μ = (α * β)/(α + β)
     RP = (RA.*α .+ RB.*β)./(α + β)
     RAB = RA .- RB; RPA = RP .- RA; RPB = RP .- RB
@@ -125,14 +129,14 @@ function overlap(α::Real, la::Int, RA::AbstractVector{T},
 
     for (b,(jx,jy,jz)) in enumerate(get_ijk(lb))
         for (a,(ix,iy,iz)) in enumerate(get_ijk(la))
-            Ex = Etij(0, ix, jx, Kαβ[1], RPA[1], RPB[1], α, β)
-            Ey = Etij(0, iy, jy, Kαβ[2], RPA[2], RPB[2], α, β)
-            Ez = Etij(0, iz, jz, Kαβ[3], RPA[3], RPB[3], α, β)
+            Ex = Etij(0, ix, jx, Kαβ[1], RPA[1], RPB[1], p)
+            Ey = Etij(0, iy, jy, Kαβ[2], RPA[2], RPB[2], p)
+            Ez = Etij(0, iz, jz, Kαβ[3], RPA[3], RPB[3], p)
             @inbounds S[a,b] = Ex * Ey * Ez
         end
     end
 
-    return ((π / (α + β) )^1.5) .* S
+    return ((π / p)^1.5) .* S
 end
 
 
@@ -184,11 +188,11 @@ function attraction(α::Real, ikm::NTuple{3,Int}, RA::NTuple{3,Float64},
 
     vne = 0.0
     for t = 0:i+j
-        Eij = Etij(t, i, j, Kαβ[1], RPA[1], RPB[1], α, β)
+        Eij = Etij(t, i, j, Kαβ[1], RPA[1], RPB[1], p)
         for u = 0:k+l
-            Ekl = Etij(u, k, l, Kαβ[2], RPA[2], RPB[2], α, β)
+            Ekl = Etij(u, k, l, Kαβ[2], RPA[2], RPB[2], p)
             for v = 0:m+n
-                Emn = Etij(v, m, n, Kαβ[3], RPA[3], RPB[3], α, β)
+                Emn = Etij(v, m, n, Kαβ[3], RPA[3], RPB[3], p)
                 vne +=  Eij * Ekl * Emn * Rtuv(t, u, v, 0, p, RPC)
             end
         end
@@ -226,17 +230,17 @@ function repulsion(α::Real, ikm1::NTuple{3,Int}, RA::NTuple{3,Float64},
 
     vee = 0.0
     for t = 0:i1+j1
-        Eij1 = Etij(t, i1, j1, Kαβ[1], RPA[1], RPB[1], α, β)
+        Eij1 = Etij(t, i1, j1, Kαβ[1], RPA[1], RPB[1], p)
         for u = 0:k1+l1
-            Ekl1 = Etij(u, k1, l1, Kαβ[2], RPA[2], RPB[2], α, β)
+            Ekl1 = Etij(u, k1, l1, Kαβ[2], RPA[2], RPB[2], p)
             for v = 0:m1+n1
-                Emn1 = Etij(v, m1, n1, Kαβ[3], RPA[3], RPB[3], α, β)
+                Emn1 = Etij(v, m1, n1, Kαβ[3], RPA[3], RPB[3], p)
                 for τ = 0:i2+j2
-                    Eij2 = Etij(τ, i2, j2, Kγδ[1], RQC[1], RQD[1], γ, δ)
+                    Eij2 = Etij(τ, i2, j2, Kγδ[1], RQC[1], RQD[1], q)
                     for ν = 0:k2+l2
-                        Ekl2 = Etij(ν, k2, l2, Kγδ[2], RQC[2], RQD[2], γ, δ)
+                        Ekl2 = Etij(ν, k2, l2, Kγδ[2], RQC[2], RQD[2], q)
                         for ϕ = 0:m2+n2
-                            Emn2 = Etij(ϕ, m2, n2, Kγδ[3], RQC[3], RQD[3], γ, δ)
+                            Emn2 = Etij(ϕ, m2, n2, Kγδ[3], RQC[3], RQD[3], q)
                             vee += Eij1 * Ekl1 * Emn1 * Eij2 * Ekl2 * Emn2 *
                                    Rtuv(t+τ, u+ν, v+ϕ, 0, ξ, RPQ) * (-1)^(τ+ν+ϕ)
                         end
@@ -287,16 +291,13 @@ end
 # using Memoize
 
 """
-    Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
+    Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, p::Real)
 
 Compute the Hermite expansion coefficients for a 1-dimensional Cartesian overlap distribution
 using a two-term recursion relation.
 """
-function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
+function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, p::Real)
 # @memoize function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
-
-    # compute overlap exponent
-    p = α + β
 
     # enter recursion
     if t < 0 || t > i+j
@@ -305,15 +306,15 @@ function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Re
         if i == j == 0
             return Kαβx
         elseif j == 0
-            return XPA * Etij(0, i-1, j, Kαβx, XPA, XPB, α, β) +
-                         Etij(1, i-1, j, Kαβx, XPA, XPB, α, β)
+            return XPA * Etij(0, i-1, j, Kαβx, XPA, XPB, p) +
+                         Etij(1, i-1, j, Kαβx, XPA, XPB, p)
         else
-            return XPB * Etij(0, i, j-1, Kαβx, XPA, XPB, α, β) +
-                         Etij(1, i, j-1, Kαβx, XPA, XPB, α, β)
+            return XPB * Etij(0, i, j-1, Kαβx, XPA, XPB, p) +
+                         Etij(1, i, j-1, Kαβx, XPA, XPB, p)
         end
     else
-        return (1/(2*p*t)) * (i * Etij(t-1, i-1, j, Kαβx, XPA, XPB, α, β) +
-                              j * Etij(t-1, i, j-1, Kαβx, XPA, XPB, α, β) )
+        return (1/(2*p*t)) * (i * Etij(t-1, i-1, j, Kαβx, XPA, XPB, p) +
+                              j * Etij(t-1, i, j-1, Kαβx, XPA, XPB, p) )
     end
 end
 
