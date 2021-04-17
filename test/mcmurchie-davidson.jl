@@ -3,7 +3,7 @@
 
     tol = 1e-15
 
-    E = hermite_expansion(3, 3, 1.55, 0.2, 0.8, 4.0)
+    E = hermite_expansion(3, 3, 1.55, 4.0, 0.2, 0.8)
     # note that E = E[t+1,i+1,j+1], e.g. E₀¹² = E[1,2,3]
     @test E[1,1,1] ≈ 1.55       rtol = tol atol = tol
     @test E[1,1,2] ≈ 1.24       rtol = tol atol = tol

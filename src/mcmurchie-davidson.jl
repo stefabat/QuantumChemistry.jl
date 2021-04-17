@@ -1,39 +1,31 @@
 
-
 """
-    hermite_expansion(imax::Int, jmax::Int, Kαβ::Real, PA::Real, PB::Real, p::Real)
+    hermite_expansion!(E::AbstractArray, imax::Int, jmax::Int, Kαβ::Real, p::Real, PA::Real, PB::Real)
 
 Compute the Hermite expansion coefficients for a 1-dimensional Cartesian overlap distribution
 using a two-term recursion relation.
+The array `E` must have dimensions at least (`imax+jmax+1`,`imax+1`,`jmax+1`). To increase performance
+there are no bounds check.
 """
-function hermite_expansion(imax::Int, jmax::Int, Kαβ::Real, PA::Real, PB::Real, p::Real)
+function hermite_expansion!(E::AbstractArray, imax::Int, jmax::Int, Kαβ::Real, p::Real, PA::Real, PB::Real)
 
-    # initialize array of expansion coefficients
-    # E = OffsetArray(zeros(imax+jmax+1,imax+1,jmax+1),-1,-1,-1)
-    E = zeros(imax+jmax+1,imax+1,jmax+1)
-
-    # enter recursion
+    # note that Eₜⁱʲ = E[t+1,i+1,j+1], e.g. E₀¹² = E[1,2,3]
     for j = 0:jmax
         for i = 0:imax
-            for t = i+j:-1:0
+            @inbounds for t = i+j:-1:0
                 if t > 0
                     if i > 0
-                        # E[t,i,j] += (1/(2*p*t)) * i * E[t-1, i-1, j]
                         E[t+1,i+1,j+1] += (1/(2*p*t)) * i * E[t, i, j+1]
                     end
                     if j > 0
-                        # E[t,i,j] += (1/(2*p*t)) * j * E[t-1, i, j-1]
                         E[t+1,i+1,j+1] += (1/(2*p*t)) * j * E[t, i+1, j]
                     end
                 else
                     if i == j == 0
-                        # E[t,i,j] = Kαβ
                         E[t+1,i+1,j+1] = Kαβ
                     elseif j == 0
-                        # E[t,i,j] = PA * E[0, i-1, j] + E[1, i-1, j]
                         E[t+1,i+1,j+1] = PA * E[1, i, j+1] + E[2, i, j+1]
                     else
-                        # E[t,i,j] = PB * E[0, i, j-1] + E[1, i, j-1]
                         E[t+1,i+1,j+1] = PB * E[1, i+1, j] + E[2, i+1, j]
                     end
                 end
@@ -45,52 +37,66 @@ function hermite_expansion(imax::Int, jmax::Int, Kαβ::Real, PA::Real, PB::Real
 end
 
 
+"""
+    hermite_expansion(imax::Int, jmax::Int, Kαβ::Real, p::Real, PA::Real, PB::Real)
+
+Compute the Hermite expansion coefficients for a 1-dimensional Cartesian overlap distribution
+using a two-term recursion relation.
+"""
+function hermite_expansion(imax::Int, jmax::Int, Kαβ::Real, p::Real, PA::Real, PB::Real)
+
+    # initialize array of expansion coefficients
+    E = zeros(imax+jmax+1,imax+1,jmax+1)
+
+    return hermite_expansion!(E, imax, jmax, Kαβ, p, PA, PB)
+end
+
 
 """
-    hermite_integral(tmax::Int, umax::Int, vmax::Int, p::Real, RPC::StaticVector{3})
+    hermite_integral!(R::AbstractArray, tmax::Int, umax::Int, vmax::Int, p::Real, PQx::Real, PQy::Real, PQz::Real)
 
 Compute the integral of an Hermite Gaussian divided by the Coulomb operator.
+The array `R` must have dimensions at least (`tmax+umax+vmax+1`,`tmax+1`,`umax+1`,`vmax+1`).
+To increase performance there are no bounds check.
 """
-function hermite_integral(tmax::Int, umax::Int, vmax::Int, p::Real, RPC::AbstractVector)
-
-    # initialize array
-    R = OffsetArray(zeros(tmax+umax+vmax+1,tmax+1,umax+1,vmax+1),-1,-1,-1,-1)
+function hermite_integral!(R::AbstractArray, tmax::Int, umax::Int, vmax::Int,
+    p::Real, PQx::Real, PQy::Real, PQz::Real)
 
     # compute auxiliary integrals Rⁿ₀₀₀
-    for n = 0:tmax+umax+vmax
-        R[n,0,0,0] = (-2.0*p)^n * boys(n,p*RPC⋅RPC)
+    @inbounds for n = 0:tmax+umax+vmax
+        R[n+1, 1, 1, 1] = (-2.0*p)^n * boys(n,p * (PQx^2 + PQy^2 + PQz^2))
     end
 
     # transfer angular momentum n to t
-    for t=0:max-1
-        for n=0:tmax+umax+vmax-t-1
-            R[n,t+1,0,0] = RPC[1]*R[n+1, t, 0, 0]
+    for t = 0:tmax-1
+        @inbounds for n = 0:tmax+umax+vmax-t-1
+            R[n+1, t+2, 1, 1] = PQx * R[n+2, t+1, 1, 1]
             if t > 0
-                R[n,t+1,0,0] += t*R[n+1, t-1, 0, 0]
+                R[n+1, t+2, 1, 1] += t * R[n+2, t, 1, 1]
             end
         end
     end
 
     # transfer angular momentum n to u
-    for u=0:umax-1
-        for t=0:tmax
-            for n=0:tmax+umax+vmax-t-u-1
-                R[n,t,u+1,0] = RPC[2]*R[n+1, t, u, 0]
+    for u = 0:umax-1
+        for t = 0:tmax
+            @inbounds for n = 0:tmax+umax+vmax-t-u-1
+                R[n+1, t+1, u+2, 1] = PQy * R[n+2, t+1, u+1, 1]
                 if u > 0
-                    R[n,t,u+1,0] += u*R[n+1, t, u-1, 0]
+                    R[n+1, t+1, u+2, 1] += u * R[n+2, t+1, u, 1]
                 end
             end
         end
     end
 
     # transfer angular momentum n to v
-    for v=0:vmax-1
-        for u=0:umax
-            for t=0:tmax
-                for n=0:tmax+umax+vmax-t-u-v-1
-                    R[n,t,u,v+1] = RPC[3]*R[n+1, t, u, v]
+    for v = 0:vmax-1
+        for u = 0:umax
+            for t = 0:tmax
+                @inbounds for n = 0:tmax+umax+vmax-t-u-v-1
+                    R[n+1, t+1, u+1, v+2] = PQz * R[n+2, t+1, u+1, v+1]
                     if v > 0
-                    R[n,t,u,v+1] += v*R[n+1, t, u, v-1]
+                        R[n+1, t+1, u+1, v+2] += v * R[n+2, t+1, u+1, v]
                     end
                 end
             end
@@ -98,9 +104,21 @@ function hermite_integral(tmax::Int, umax::Int, vmax::Int, p::Real, RPC::Abstrac
     end
 
     return R
-
 end
 
+
+"""
+    hermite_integral(tmax::Int, umax::Int, vmax::Int, p::Real, PQx::Real, PQy::Real, PQz::Real)
+
+Compute the integral of an Hermite Gaussian divided by the Coulomb operator.
+"""
+function hermite_integral(tmax::Int, umax::Int, vmax::Int, p::Real, PQx::Real, PQy::Real, PQz::Real)
+
+    # initialize array
+    R = zeros(tmax+umax+vmax+1,tmax+1,umax+1,vmax+1)
+
+    return hermite_integral!(R, tmax, umax, vmax, p, PQx, PQy, PQz)
+end
 
 
 
