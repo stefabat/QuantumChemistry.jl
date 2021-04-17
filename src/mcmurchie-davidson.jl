@@ -9,7 +9,8 @@ there are no bounds check.
 """
 function hermite_expansion!(E::AbstractArray, imax::Int, jmax::Int, Kαβ::Real, p::Real, PA::Real, PB::Real)
 
-    # note that Eₜⁱʲ = E[t+1,i+1,j+1], e.g. E₀¹² = E[1,2,3]
+    # note that Eₜⁱʲ = E[t+1,i+1,j+1] because in Julia we start
+    # to count at 1, e.g. E₀¹² = E[1,2,3]
     for j = 0:jmax
         for i = 0:imax
             @inbounds for t = i+j:-1:0
@@ -132,15 +133,23 @@ Compute the overlap integral matrix between two primitive Cartesian shells cente
 `RA` and `RB`, with exponents `α` and `β` and angular momenta `la` and `lb`.
 The centers `RA` and `RB` are expected to be 3-dimensional vectors.
 """
-function overlap(α::Real, la::Int, RA::AbstractVector{T},
-                 β::Real, lb::Int, RB::AbstractVector{T}) where {T<:Real}
+function overlap(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+                 β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
 
     # precomputing all required quantities
-    p = α + β
-    μ = (α * β)/(α + β)
-    RP = (RA.*α .+ RB.*β)./(α + β)
-    RAB = RA .- RB; RPA = RP .- RA; RPB = RP .- RB
-    Kαβ = exp.(-μ.*RAB.^2)
+    p  =  α + β
+    μ  = (α * β)/(α + β)
+
+    Px = (α*Ax + β*Bx)/p
+    Py = (α*Ay + β*By)/p
+    Pz = (α*Az + β*Bz)/p
+
+    PAx = Px - Ax; PAy = Py - Ay; PAz = Pz - Az
+    PBx = Px - Bx; PBy = Py - By; PBz = Pz - Bz
+
+    Kαβx = exp(-μ * (Ax-Bx)^2)
+    Kαβy = exp(-μ * (Ay-By)^2)
+    Kαβz = exp(-μ * (Az-Bz)^2)
 
     # number of Cartesian primitive functions in shell
     Nla = (la+1)*(la+2)÷2
@@ -149,9 +158,9 @@ function overlap(α::Real, la::Int, RA::AbstractVector{T},
 
     for (b,(jx,jy,jz)) in enumerate(get_ijk(lb))
         for (a,(ix,iy,iz)) in enumerate(get_ijk(la))
-            Ex = Etij(0, ix, jx, Kαβ[1], RPA[1], RPB[1], p)
-            Ey = Etij(0, iy, jy, Kαβ[2], RPA[2], RPB[2], p)
-            Ez = Etij(0, iz, jz, Kαβ[3], RPA[3], RPB[3], p)
+            Ex = Etij(0, ix, jx, Kαβx, p, PAx, PBx)
+            Ey = Etij(0, iy, jy, Kαβy, p, PAy, PBy)
+            Ez = Etij(0, iz, jz, Kαβz, p, PAz, PBz)
             @inbounds S[a,b] = Ex * Ey * Ez
         end
     end
@@ -311,12 +320,12 @@ end
 # using Memoize
 
 """
-    Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, p::Real)
+    Etij(t::Int ,i::Int, j::Int, Kαβx::Real, p::Real, XPA::Real, XPB::Real)
 
 Compute the Hermite expansion coefficients for a 1-dimensional Cartesian overlap distribution
 using a two-term recursion relation.
 """
-function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, p::Real)
+function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, p::Real, XPA::Real, XPB::Real)
 # @memoize function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, α::Real, β::Real)
 
     # enter recursion
@@ -326,15 +335,15 @@ function Etij(t::Int ,i::Int, j::Int, Kαβx::Real, XPA::Real, XPB::Real, p::Rea
         if i == j == 0
             return Kαβx
         elseif j == 0
-            return XPA * Etij(0, i-1, j, Kαβx, XPA, XPB, p) +
-                         Etij(1, i-1, j, Kαβx, XPA, XPB, p)
+            return XPA * Etij(0, i-1, j, Kαβx, p, XPA, XPB) +
+                         Etij(1, i-1, j, Kαβx, p, XPA, XPB)
         else
-            return XPB * Etij(0, i, j-1, Kαβx, XPA, XPB, p) +
-                         Etij(1, i, j-1, Kαβx, XPA, XPB, p)
+            return XPB * Etij(0, i, j-1, Kαβx, p, XPA, XPB) +
+                         Etij(1, i, j-1, Kαβx, p, XPA, XPB)
         end
     else
-        return (1/(2*p*t)) * (i * Etij(t-1, i-1, j, Kαβx, XPA, XPB, p) +
-                              j * Etij(t-1, i, j-1, Kαβx, XPA, XPB, p) )
+        return (1/(2*p*t)) * (i * Etij(t-1, i-1, j, Kαβx, p, XPA, XPB) +
+                              j * Etij(t-1, i, j-1, Kαβx, p, XPA, XPB) )
     end
 end
 

@@ -62,3 +62,36 @@ end
     @test R[1,4,6,2] ≈ -410.4436752870131500 rtol = tol atol = tol
 
 end
+
+@testset "Overlap integrals" begin
+
+    tol = 1e-15
+
+    # s-type GTO Ga
+    α = 3.5; la = 0; Ax = 0.0; Ay = 0.0; Az = 0.0;
+    # p-type GTO Gb
+    β = 1.5; lb = 1; Bx = 0.0; By = 0.0; Bz = 1.0;
+    # d-type GTO Gc
+    γ = 0.5; lc = 2; Cx = 0.4; Cy = 0.3; Cz = 0.2;
+    # self-overlap of Ga, needed for normalization
+    Sa = overlap(α, la, Ax, Ay, Az, α, la, Ax, Ay, Az)
+    @test Sa ≈ [0.30066145098071745]
+    # self-overlap of Gb, needed for normalization
+    Sb = overlap(β, lb, Bx, By, Bz, β, lb, Bx, By, Bz)
+    @test Sb[1,:] ≈ [0.17860420377260638 ; 0.0 ; 0.0]
+    # overlap <Ga|Gb> -> 1x3 array
+    Sab = overlap(α, la, Ax, Ay, Az, β, lb, Bx, By, Bz)
+    @test Sab ≈ [0.0 0.0 -0.12199966455329908]
+    # self-overlap of Gc, needed for normalization
+    Sc = overlap(γ, lc, Cx, Cy, Cz, γ, lc, Cx, Cy, Cz)
+    @test Sc[1,1:4] ≈ [4.176245997623781 ; 0.0 ; 0.0 ; 1.3920819992079267]
+    # overlap <Ga|Gc> -> 1x6 array
+    Sac = overlap(α, la, Ax, Ay, Az, γ, lc, Cx, Cy, Cz)
+    @test Sac' ≈ [0.15174308630054437;
+                  0.05632887294489904;
+                  0.03755258196326603;
+                  0.11888457708268658;
+                  0.02816443647244952;
+                  0.09541421335564533]
+
+end
