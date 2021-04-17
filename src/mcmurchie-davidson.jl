@@ -62,6 +62,8 @@ To increase performance there are no bounds check.
 function hermite_integral!(R::AbstractArray, tmax::Int, umax::Int, vmax::Int,
     p::Real, PQx::Real, PQy::Real, PQz::Real)
 
+    # note that Rⁿₜᵤᵥ = R[n+1,t+1,u+1,v+1], e.g. R⁰₂₀₁ = R[1,3,1,2]
+
     # compute auxiliary integrals Rⁿ₀₀₀
     @inbounds for n = 0:tmax+umax+vmax
         R[n+1, 1, 1, 1] = (-2.0*p)^n * boys(n,p * (PQx^2 + PQy^2 + PQz^2))
