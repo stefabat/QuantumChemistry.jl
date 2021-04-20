@@ -1,13 +1,16 @@
 
+
 """
-    hermite_expansion!(E::AbstractArray, imax::Int, jmax::Int, Kαβ::Real, p::Real, PA::Real, PB::Real)
+    hermite_expansion!(E::AbstractArray, imax::Int, jmax::Int,
+                       Kαβ::Real, p::Real, PA::Real, PB::Real)
 
 Compute the Hermite expansion coefficients for a 1-dimensional Cartesian overlap distribution
 using a two-term recursion relation.
-The array `E` must have dimensions at least (`imax+jmax+1`,`imax+1`,`jmax+1`). To increase performance
-there are no bounds check.
+The array `E` must have dimensions at least `(imax+jmax+1,imax+1,jmax+1)`.
+To increase performance there are no bounds check.
 """
-function hermite_expansion!(E::AbstractArray, imax::Int, jmax::Int, Kαβ::Real, p::Real, PA::Real, PB::Real)
+function hermite_expansion!(E::AbstractArray, imax::Int, jmax::Int,
+                            Kαβ::Real, p::Real, PA::Real, PB::Real)
 
     # note that Eₜⁱʲ = E[t+1,i+1,j+1] because in Julia we start
     # to count at 1, e.g. E₀¹² = E[1,2,3]
@@ -57,7 +60,7 @@ end
     hermite_integral!(R::AbstractArray, tmax::Int, umax::Int, vmax::Int, p::Real, PQx::Real, PQy::Real, PQz::Real)
 
 Compute the integral of an Hermite Gaussian divided by the Coulomb operator.
-The array `R` must have dimensions at least (`tmax+umax+vmax+1`,`tmax+1`,`umax+1`,`vmax+1`).
+The array `R` must have dimensions at least `(tmax+umax+vmax+1,tmax+1,umax+1,vmax+1)`.
 To increase performance there are no bounds check.
 """
 function hermite_integral!(R::AbstractArray, tmax::Int, umax::Int, vmax::Int,
@@ -124,17 +127,19 @@ function hermite_integral(tmax::Int, umax::Int, vmax::Int, p::Real, PQx::Real, P
 end
 
 
-
-
 """
-    overlap(α::Real, la::Int, RA::AbstractVector{Real}, β::Real, lb::Int, RB::AbstractVector{Real})
+    overlap!(S::AbstractArray,
+             α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+             β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
 
 Compute the overlap integral matrix between two primitive Cartesian shells centered on
-`RA` and `RB`, with exponents `α` and `β` and angular momenta `la` and `lb`.
-The centers `RA` and `RB` are expected to be 3-dimensional vectors.
+`(Ax,Ay,Az)` and `(Bx,By,Bz)`, with exponents `α` and `β` and angular momenta `la` and `lb`.
+The array `S` must have dimensions at least `((la+1)*(la+2)÷2,(lb+1)*(lb+2)÷2)`.
+To increase performance there are no bounds check.
 """
-function overlap(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
-                 β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
+function overlap!(S::AbstractArray,
+                  α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+                  β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
 
     # precomputing all required quantities
     p  =  α + β
@@ -151,21 +156,38 @@ function overlap(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
     Kαβy = exp(-μ * (Ay-By)^2)
     Kαβz = exp(-μ * (Az-Bz)^2)
 
+    Ex = hermite_expansion(la, lb, Kαβx, p, PAx, PBx)
+    Ey = hermite_expansion(la, lb, Kαβy, p, PAy, PBy)
+    Ez = hermite_expansion(la, lb, Kαβz, p, PAz, PBz)
+
+    for (b,(jx,jy,jz)) in enumerate(get_ijk(lb))
+        for (a,(ix,iy,iz)) in enumerate(get_ijk(la))
+            @inbounds S[a,b] = Ex[1,ix+1,jx+1] *
+                               Ey[1,iy+1,jy+1] *
+                               Ez[1,iz+1,jz+1]
+        end
+    end
+
+    return ((π / p)^1.5) .* S
+end
+
+
+"""
+    overlap(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+            β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
+
+Compute the overlap integral matrix between two primitive Cartesian shells centered on
+`(Ax,Ay,Az)` and `(Bx,By,Bz)`, with exponents `α` and `β` and angular momenta `la` and `lb`.
+"""
+function overlap(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+                 β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
+
     # number of Cartesian primitive functions in shell
     Nla = (la+1)*(la+2)÷2
     Nlb = (lb+1)*(lb+2)÷2
     S = zeros(Nla,Nlb)
 
-    for (b,(jx,jy,jz)) in enumerate(get_ijk(lb))
-        for (a,(ix,iy,iz)) in enumerate(get_ijk(la))
-            Ex = Etij(0, ix, jx, Kαβx, p, PAx, PBx)
-            Ey = Etij(0, iy, jy, Kαβy, p, PAy, PBy)
-            Ez = Etij(0, iz, jz, Kαβz, p, PAz, PBz)
-            @inbounds S[a,b] = Ex * Ey * Ez
-        end
-    end
-
-    return ((π / p)^1.5) .* S
+    return overlap!(S, α, la, Ax, Ay, Az, β, lb, Bx, By, Bz)
 end
 
 
@@ -317,6 +339,31 @@ function dfactorial(n::Int)
 end
 
 
+"""
+    get_ijk(l::Int)
+
+Return an array with the Cartesian quantum numbers summing to angular momentum `l`.
+"""
+function get_ijk(l::Int)
+    # number of angular momentum projections
+    Nijk = (l+1)*(l+2)÷2
+    # preallocate vector of ml values
+    ijk = Vector{NTuple{3,Int}}(undef, Nijk)
+    # initialize counter
+    it = 1
+    for a = 1:l+1
+        for b = 1:a
+            i = l + 1 - a
+            j = a - b
+            k = b - 1
+            ijk[it] = (i, j, k)
+            it +=1
+        end
+    end
+    return ijk
+end
+
+
 # using Memoize
 
 """
@@ -380,26 +427,40 @@ end
 
 
 """
-    get_ijk(l::Int)
-
-Return an array with the Cartesian quantum numbers summing to angular momentum `l`.
+Inefficient overlap
 """
-function get_ijk(l::Int)
-    # number of angular momentum projections
-    Nijk = (l+1)*(l+2)÷2
-    # preallocate vector of ml values
-    ijk = Vector{NTuple{3,Int}}(undef, Nijk)
-    # initialize counter
-    it = 1
-    for a = 1:l+1
-        for b = 1:a
-            i = l + 1 - a
-            j = a - b
-            k = b - 1
-            ijk[it] = (i, j, k)
-            it +=1
+function overlap2(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+                  β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
+
+    # precomputing all required quantities
+    p  =  α + β
+    μ  = (α * β)/(α + β)
+
+    Px = (α*Ax + β*Bx)/p
+    Py = (α*Ay + β*By)/p
+    Pz = (α*Az + β*Bz)/p
+
+    PAx = Px - Ax; PAy = Py - Ay; PAz = Pz - Az
+    PBx = Px - Bx; PBy = Py - By; PBz = Pz - Bz
+
+    Kαβx = exp(-μ * (Ax-Bx)^2)
+    Kαβy = exp(-μ * (Ay-By)^2)
+    Kαβz = exp(-μ * (Az-Bz)^2)
+
+    # number of Cartesian primitive functions in shell
+    Nla = (la+1)*(la+2)÷2
+    Nlb = (lb+1)*(lb+2)÷2
+    S = zeros(Nla,Nlb)
+
+    for (b,(jx,jy,jz)) in enumerate(get_ijk(lb))
+        for (a,(ix,iy,iz)) in enumerate(get_ijk(la))
+            Ex = Etij(0, ix, jx, Kαβx, p, PAx, PBx)
+            Ey = Etij(0, iy, jy, Kαβy, p, PAy, PBy)
+            Ez = Etij(0, iz, jz, Kαβz, p, PAz, PBz)
+            @inbounds S[a,b] = Ex * Ey * Ez
         end
     end
-    return ijk
+
+    return ((π / p)^1.5) .* S
 end
 

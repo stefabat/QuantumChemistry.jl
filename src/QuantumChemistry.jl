@@ -6,6 +6,6 @@ module QuantumChemistry
     export hermite_expansion!,hermite_expansion,Etij
     export hermite_integral!,hermite_integral,Rtuv
 
-    export overlap
+    export overlap,overlap2,overlap!
 
 end
