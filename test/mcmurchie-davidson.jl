@@ -67,10 +67,10 @@ end
 
     tol = 1e-15
 
-    α = 3.5; la = 0; Ax = 0.0; Ay = 0.0; Az = 0.0; # s-type GTO Ga
-    β = 1.5; lb = 1; Bx = 0.0; By = 0.0; Bz = 1.0; # p-type GTO Gb
-    γ = 0.5; lc = 2; Cx = 0.4; Cy = 0.3; Cz = 0.2; # d-type GTO Gc
-    δ = 0.5; ld = 3; Dx = 0.1; Dy = 0.3; Dz = 0.5; # f-type GTO Gd
+    α = 3.5; la = 0; Ax = 0.0; Ay = 0.0; Az = 0.0; # s-type GTO shell Ga
+    β = 1.5; lb = 1; Bx = 0.0; By = 0.0; Bz = 1.0; # p-type GTO shell Gb
+    γ = 0.5; lc = 2; Cx = 0.4; Cy = 0.3; Cz = 0.2; # d-type GTO shell Gc
+    δ = 0.5; ld = 3; Dx = 0.1; Dy = 0.3; Dz = 0.5; # f-type GTO shell Gd
 
     # self-overlaps, needed for normalization
     Sa = overlap(α, la, Ax, Ay, Az, α, la, Ax, Ay, Az)

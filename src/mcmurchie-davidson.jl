@@ -12,6 +12,8 @@ To increase performance there are no bounds check.
 function hermite_expansion!(E::AbstractArray, imax::Int, jmax::Int,
                             Kαβ::Real, p::Real, PA::Real, PB::Real)
 
+    # Assuming E is zerod out!!!
+
     # note that Eₜⁱʲ = E[t+1,i+1,j+1] because in Julia we start
     # to count at 1, e.g. E₀¹² = E[1,2,3]
     for j = 0:jmax
@@ -37,7 +39,7 @@ function hermite_expansion!(E::AbstractArray, imax::Int, jmax::Int,
         end
     end
 
-    return E
+    return nothing
 end
 
 
@@ -51,8 +53,42 @@ function hermite_expansion(imax::Int, jmax::Int, Kαβ::Real, p::Real, PA::Real,
 
     # initialize array of expansion coefficients
     E = zeros(imax+jmax+1,imax+1,jmax+1)
+    # compute expansion coefficients
+    hermite_expansion!(E, imax, jmax, Kαβ, p, PA, PB)
 
-    return hermite_expansion!(E, imax, jmax, Kαβ, p, PA, PB)
+    return E
+end
+
+
+"Compute the Hermite expansion coefficients for two primitive shells."
+function hermite_expansion!(E::AbstractArray,
+                            α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+                            β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
+
+    # precomputing all required quantities
+    p  =  α + β
+    μ  = (α * β)/(α + β)
+
+    Px = (α*Ax + β*Bx)/p
+    Py = (α*Ay + β*By)/p
+    Pz = (α*Az + β*Bz)/p
+
+    PAx = Px - Ax; PAy = Py - Ay; PAz = Pz - Az
+    PBx = Px - Bx; PBy = Py - By; PBz = Pz - Bz
+
+    Kαβx = exp(-μ * (Ax-Bx)^2)
+    Kαβy = exp(-μ * (Ay-By)^2)
+    Kαβz = exp(-μ * (Az-Bz)^2)
+
+    E .= 0.0
+    Ex = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 1]
+    Ey = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 2]
+    Ez = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 3]
+    hermite_expansion!(Ex, la, lb, Kαβx, p, PAx, PBx)
+    hermite_expansion!(Ey, la, lb, Kαβy, p, PAy, PBy)
+    hermite_expansion!(Ez, la, lb, Kαβz, p, PAz, PBz)
+
+    return nothing
 end
 
 
@@ -128,7 +164,7 @@ end
 
 
 """
-    overlap!(S::AbstractArray,
+    overlap!(S::AbstractArray, E::AbstractArray
              α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
              β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
 
@@ -137,40 +173,37 @@ Compute the overlap integral matrix between two primitive Cartesian shells cente
 The array `S` must have dimensions at least `((la+1)*(la+2)÷2,(lb+1)*(lb+2)÷2)`.
 To increase performance there are no bounds check.
 """
-function overlap!(S::AbstractArray,
+function overlap!(S::AbstractArray, E::AbstractArray,
                   α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
                   β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
 
-    # precomputing all required quantities
-    p  =  α + β
-    μ  = (α * β)/(α + β)
+    # E = zeros(la+lb+1,la+1,lb+1,3)
+    hermite_expansion!(E, α, la, Ax, Ay, Az, β, lb, Bx, By, Bz)
 
-    Px = (α*Ax + β*Bx)/p
-    Py = (α*Ay + β*By)/p
-    Pz = (α*Az + β*Bz)/p
+    î = get_ijk(la)
+    ĵ = get_ijk(lb)
 
-    PAx = Px - Ax; PAy = Py - Ay; PAz = Pz - Az
-    PBx = Px - Bx; PBy = Py - By; PBz = Pz - Bz
-
-    Kαβx = exp(-μ * (Ax-Bx)^2)
-    Kαβy = exp(-μ * (Ay-By)^2)
-    Kαβz = exp(-μ * (Az-Bz)^2)
-
-    Ex = hermite_expansion(la, lb, Kαβx, p, PAx, PBx)
-    Ey = hermite_expansion(la, lb, Kαβy, p, PAy, PBy)
-    Ez = hermite_expansion(la, lb, Kαβz, p, PAz, PBz)
-
-    for (b,(jx,jy,jz)) in enumerate(get_ijk(lb))
-        for (a,(ix,iy,iz)) in enumerate(get_ijk(la))
-            @inbounds S[a,b] = Ex[1,ix+1,jx+1] *
-                               Ey[1,iy+1,jy+1] *
-                               Ez[1,iz+1,jz+1]
+    for (b,(jx,jy,jz)) in enumerate(ĵ)
+        @inbounds for (a,(ix,iy,iz)) in enumerate(î)
+            S[a,b] = sqrt(π/(α+β))^3  *
+                     E[1,ix+1,jx+1,1] *
+                     E[1,iy+1,jy+1,2] *
+                     E[1,iz+1,jz+1,3]
         end
     end
 
-    return ((π / p)^1.5) .* S
+    return nothing
 end
 
+# function overlap!(S::AbstractArray,
+#                   α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+#                   β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
+
+#     E = zeros(la+lb+1,la+1,lb+1,3)
+#     S = overlap!(S, E, α, la, Ax, Ay, Az, β, lb, Bx, By, Bz)
+
+#     return nothing
+# end
 
 """
     overlap(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
@@ -186,41 +219,84 @@ function overlap(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
     Nla = (la+1)*(la+2)÷2
     Nlb = (lb+1)*(lb+2)÷2
     S = zeros(Nla,Nlb)
+    E = zeros(la+lb+1,la+1,lb+1,3)
 
-    return overlap!(S, α, la, Ax, Ay, Az, β, lb, Bx, By, Bz)
+    overlap!(S, E, α, la, Ax, Ay, Az, β, lb, Bx, By, Bz)
+
+    return S
 end
 
 
+"""
+    kinetic!(T::AbstractArray, E::AbstractArray,
+            α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+            β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
+
+Compute the kinetic energy integral matrix between two primitive
+Cartesian shells centered on `(Ax,Ay,Az)` and `(Bx,By,Bz)`, with exponents `α` and
+`β` and angular momenta `la` and `lb`.
+"""
+function kinetic!(T::AbstractArray, E::AbstractArray,
+                  α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+                  β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
+
+    hermite_expansion!(E, α, la+2, Ax, Ay, Az, β, lb, Bx, By, Bz)
+
+    Ex = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 1]
+    Ey = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 2]
+    Ez = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 3]
+
+    î = get_ijk(la)
+    ĵ = get_ijk(lb)
+
+    for (b,(jx,jy,jz)) in enumerate(ĵ)
+        @inbounds for (a,(ix,iy,iz)) in enumerate(î)
+            Tx = (-2*α^2*Ex[1,ix+3,jx+1]) + (α*(2*ix+1)*Ex[1,ix+1,jx+1])
+            if ix > 1
+                Tx -= 0.5*ix*(ix-1)*Ex[1,ix-1,jx+1]
+            end
+
+            Ty = (-2*α^2*Ey[1,iy+3,jy+1]) + (α*(2*iy+1)*Ey[1,iy+1,jy+1])
+            if iy > 1
+                Ty -= 0.5*iy*(iy-1)*Ey[1,iy-1,jy+1]
+            end
+
+            Tz = (-2*α^2*Ez[1,iz+3,jz+1]) + (α*(2*iz+1)*Ez[1,iz+1,jz+1])
+            if iz > 1
+                Tz -= 0.5*iz*(iz-1)*Ez[1,iz-1,jz+1]
+            end
+
+            T[a,b] = sqrt(π/(α+β))^3 * (
+                     Tx * Ey[1,iy+1,jy+1] * Ez[1,iz+1,jz+1] +
+                     Ex[1,ix+1,jx+1] * Ty * Ez[1,iz+1,jz+1] +
+                     Ex[1,ix+1,jx+1] * Ey[1,iy+1,jy+1] * Tz )
+        end
+    end
+
+    return nothing
+end
 
 
-"""Compute the kinetic energy integral -0.5*<Ga|∇^2|Gb> of two Cartesian PGFs."""
-function kinetic(α::Real, ikm::NTuple{3,Int}, RA::NTuple{3,Float64},
-                 β::Real, jln::NTuple{3,Int}, RB::NTuple{3,Float64})
+"""
+    kinetic(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+            β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
 
-    # extract the angular momentum elementwise
-    (i,k,m) = ikm
-    (j,l,n) = jln
+Compute the kinetic energy integral matrix between two primitive
+Cartesian shells centered on `(Ax,Ay,Az)` and `(Bx,By,Bz)`, with exponents `α` and
+`β` and angular momenta `la` and `lb`.
+"""
+function kinetic(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+                 β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
 
-    # precompute common terms
-    dαSab = 2*α*overlap(α, (i,k,m), RA, β, (j,l,n), RB)
-    fα2 = 4*α^2
+    # number of Cartesian primitive functions in shell
+    Nla = (la+1)*(la+2)÷2
+    Nlb = (lb+1)*(lb+2)÷2
+    T = zeros(Nla,Nlb)
+    E = zeros(la+lb+3,la+3,lb+1,3)
 
-    # Dij^2 * Skl * Smn
-    Dij = i*(i-1) * overlap(α, (i-2,k,m), RA, β, (j,l,n), RB) -
-          (2*i+1) * dαSab +
-              fα2 * overlap(α, (i+2,k,m), RA, β, (j,l,n), RB)
+    kinetic!(T, E, α, la, Ax, Ay, Az, β, lb, Bx, By, Bz)
 
-    # Sij * Dkl^2 * Smn
-    Dkl = k*(k-1) * overlap(α, (i,k-2,m), RA, β, (j,l,n), RB) -
-          (2*k+1) * dαSab +
-              fα2 * overlap(α, (i,k+2,m), RA, β, (j,l,n), RB)
-
-    # Sij * Skl * Dmn^2
-    Dmn = m*(m-1) * overlap(α, (i,k,m-2), RA, β, (j,l,n), RB) -
-          (2*m+1) * dαSab +
-              fα2 * overlap(α, (i,k,m+2), RA, β, (j,l,n), RB)
-
-    return -0.5 * (Dij + Dkl + Dmn)
+    return T
 end
 
 
@@ -340,15 +416,11 @@ end
 
 
 """
-    get_ijk(l::Int)
+    get_ijk!(ijk::AbstractArray, l::Int)
 
-Return an array with the Cartesian quantum numbers summing to angular momentum `l`.
+Compute an array with the Cartesian quantum numbers summing to angular momentum `l`.
 """
-function get_ijk(l::Int)
-    # number of angular momentum projections
-    Nijk = (l+1)*(l+2)÷2
-    # preallocate vector of ml values
-    ijk = Vector{NTuple{3,Int}}(undef, Nijk)
+function get_ijk!(ijk::AbstractArray, l::Int)
     # initialize counter
     it = 1
     for a = 1:l+1
@@ -360,6 +432,24 @@ function get_ijk(l::Int)
             it +=1
         end
     end
+
+    return nothing
+end
+
+
+"""
+    get_ijk(l::Int)
+
+Return an array with the Cartesian quantum numbers summing to angular momentum `l`.
+"""
+function get_ijk(l::Int)
+    # number of angular momentum projections
+    Nijk = (l+1)*(l+2)÷2
+    # preallocate vector of ml values
+    ijk = Vector{NTuple{3,Int}}(undef, Nijk)
+    # get the vector
+    get_ijk!(ijk, l)
+
     return ijk
 end
 

@@ -8,6 +8,8 @@ module QuantumChemistry
 
     export overlap,overlap2,overlap!
 
+    export kinetic
+
     export cart2sph
 
 end
