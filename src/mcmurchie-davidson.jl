@@ -364,6 +364,92 @@ function get_ijk(l::Int)
 end
 
 
+function NlmS(l::Int, m::Int)
+    # factor in front of the sqrt
+    fac = 1.0/(2^abs(m)*factorial(l))
+
+    # numerator divided by half
+    numhalf = factorial(l+abs(m))*factorial(l-abs(m))
+
+    # check m for the denominator, multiply and return
+    if m == 0
+        return fac*sqrt(numhalf)
+    else
+        return fac*sqrt(2.0*numhalf)
+    end
+end
+
+# note that `v` can take half integer values, thus is `Real`
+function Ctuvlm(t::Int, u::Int, v::Real, l::Int, m::Int)
+    # if statement to set v_m directly in the expression
+    if m >= 0
+        return (-1)^(t+v) * (0.25)^t * binomial(l,t) *
+        binomial(l-t,abs(m)+t) * binomial(t,u) *
+        binomial(abs(m),Int(2*v))
+    else
+        # note the -0.5 due to v_m
+        return (-1)^(t+v-0.5) * (0.25)^t * binomial(l,t) *
+        binomial(l-t,abs(m)+t) * binomial(t,u) *
+        binomial(abs(m),Int(2*v))
+    end
+end
+
+## Works only up to f-type orbitals!!
+"""Compute cartesian to spherical harmonic transformation matrix for angular momentum l"""
+function cart2sph(l::Int)
+
+    # for the p shell, l=1, m=1 corresponds to px, l=1, m=-1 to py and l=1, m=0 to pz
+    # d shell: dxy,  dyz, dz^2, dxz, dx^2-y^2
+    # (2,m) : m=-2, m=-1,  m=0, m=1, m=2
+    # and so on
+
+    # Initialize matrix
+    Nsph = 2*l + 1
+    Ncart = (l+1)*(l+2)÷2
+    T = zeros(Nsph,Ncart)
+
+    # loop over magnetic quantum numbers
+    for m = -l:1:l
+        # compute v_m
+        vm = 0.0
+        if m < 0
+            vm = 0.5
+        end
+        # since the loop over v runs with half integers
+        # for m < 0, we run it instead over 2*v, where
+        # vmin and vmax are beginning and end of the
+        # loop over 2*v, such that this works for all
+        # cases, i.e. also when v is an integer
+        vmin = Int(2 * vm)
+        vmax = Int(2 * (floor(Int,abs(m)/2-vm) + vm))
+
+        # loop over auxiliary indices
+        for t = 0:floor(Int,(l-abs(m))/2)
+            for u = 0:t
+                for v = vmin:2:vmax
+                    # compute the Cartesian angular momenta
+                    # to know the associated GTO to the
+                    # transformation coefficient calculated here
+                    i = Int(2*t+abs(m)-2*(u+v/2))
+                    j = Int(2*(u+v/2))
+                    k = Int(l-2*t-abs(m))
+
+                    # compute index in matrix
+                    # index = c2s_index(i,j,k)
+                    index = indexin([(i,j,k)],get_ijk(i+j+k))[1]
+
+                    # compute coeff and save it
+                    T[m+l+1,index] = NlmS(l,m)*Ctuvlm(t,u,v/2,l,m)
+                end
+            end
+        end
+    end
+
+    # return SMatrix{Nsph,Ncart}(T)
+    return T
+end
+
+
 # using Memoize
 
 """
