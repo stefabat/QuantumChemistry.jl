@@ -242,9 +242,9 @@ function kinetic!(T::AbstractArray, E::AbstractArray,
 
     hermite_expansion!(E, α, la+2, Ax, Ay, Az, β, lb, Bx, By, Bz)
 
-    Ex = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 1]
-    Ey = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 2]
-    Ez = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 3]
+    Ex = @view E[1:la+lb+3 , 1:la+3 , 1:lb+1 , 1]
+    Ey = @view E[1:la+lb+3 , 1:la+3 , 1:lb+1 , 2]
+    Ez = @view E[1:la+lb+3 , 1:la+3 , 1:lb+1 , 3]
 
     î = get_ijk(la)
     ĵ = get_ijk(lb)
@@ -300,7 +300,12 @@ function kinetic(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
 end
 
 
-"""Compute the electron-nuclear attraction energy integral <Ga|1/r|Gb> of two PGFs."""
+# """
+
+# Compute the electron-nuclear attraction energy integral <Ga|1/r|Gb> of two PGFs.
+# """
+# function attraction(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+#                     β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
 function attraction(α::Real, ikm::NTuple{3,Int}, RA::NTuple{3,Float64},
                     β::Real, jln::NTuple{3,Int}, RB::NTuple{3,Float64},
                                                  RC::NTuple{3,Float64})
