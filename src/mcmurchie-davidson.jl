@@ -65,17 +65,18 @@ function hermite_expansion!(E::AbstractArray,
                             α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
                             β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
 
-    # precomputing all required quantities
+    # exponent of Gaussian product
     p  =  α + β
-    μ  = (α * β)/(α + β)
-
+    # center of Gaussian product
     Px = (α*Ax + β*Bx)/p
     Py = (α*Ay + β*By)/p
     Pz = (α*Az + β*Bz)/p
-
+    # distances between Gaussian centers
     PAx = Px - Ax; PAy = Py - Ay; PAz = Pz - Az
     PBx = Px - Bx; PBy = Py - By; PBz = Pz - Bz
 
+    # exponential prefactor
+    μ  = (α * β)/p
     Kαβx = exp(-μ * (Ax-Bx)^2)
     Kαβy = exp(-μ * (Ay-By)^2)
     Kαβz = exp(-μ * (Az-Bz)^2)
@@ -146,6 +147,39 @@ function hermite_integral!(R::AbstractArray, tmax::Int, umax::Int, vmax::Int,
     end
 
     return R
+end
+
+
+"Compute the Hermite integral for two primitive shells."
+function hermite_integral!(R::AbstractArray,
+                           α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+                           β::Real, lb::Int, Bx::Real, By::Real, Bz::Real,
+                                             Cx::Real, Cy::Real, Cz::Real)
+
+    # exponent of Gaussian product
+    p  =  α + β
+    # center of Gaussian product
+    Px = (α*Ax + β*Bx)/p
+    Py = (α*Ay + β*By)/p
+    Pz = (α*Az + β*Bz)/p
+    # distances between Gaussian centers
+    # PAx = Px - Ax; PAy = Py - Ay; PAz = Pz - Az
+    # PBx = Px - Bx; PBy = Py - By; PBz = Pz - Bz
+
+    PCx = Px - Cx; PCy = Py - Cy; PCz = Pz - Cz
+    # # exponential prefactor
+    # μ  = (α * β)/p
+    # Kαβx = exp(-μ * (Ax-Bx)^2)
+    # Kαβy = exp(-μ * (Ay-By)^2)
+    # Kαβz = exp(-μ * (Az-Bz)^2)
+
+    tmax = umax = vmax = la+lb
+
+    R .= 0.0
+    Rtuv = @view R[1:tmax+umax+vmax+1 , 1:tmax , 1:umax , 1:vmax]
+    hermite_integral!(Rtuv, tmax, umax, vmax, p, PCx, PCy, PCz)
+
+    return nothing
 end
 
 
@@ -300,32 +334,51 @@ function kinetic(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
 end
 
 
-# """
+"""
+    attraction(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+               β::Real, lb::Int, Bx::Real, By::Real, Bz::Real,
+                                 Cx::Real, Cy::Real, Cz::Real)
 
-# Compute the electron-nuclear attraction energy integral <Ga|1/r|Gb> of two PGFs.
-# """
-# function attraction(α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
-#                     β::Real, lb::Int, Bx::Real, By::Real, Bz::Real)
-function attraction(α::Real, ikm::NTuple{3,Int}, RA::NTuple{3,Float64},
-                    β::Real, jln::NTuple{3,Int}, RB::NTuple{3,Float64},
-                                                 RC::NTuple{3,Float64})
+Compute the electron-nuclear attraction energy integral <Ga|1/r|Gb> between two
+primitive Cartesian shells centered on `(Ax,Ay,Az)` and `(Bx,By,Bz)`, with
+exponents `α` and `β` and angular momenta `la` and `lb`.
+"""
+function attraction!(V::AbstractArray, E::AbstractArray, R::AbstractArray,
+                     α::Real, la::Int, Ax::Real, Ay::Real, Az::Real,
+                     β::Real, lb::Int, Bx::Real, By::Real, Bz::Real,
+                                       Cx::Real, Cy::Real, Cz::Real)
 
     # precomputing all required quantities
-    (i,k,m) = ikm; (j,l,n) = jln
-    p = α + β
-    RP = (α.*RA + β.*RB) ./ p
-    RAB = RA - RB; RPA = RP - RA; RPB = RP - RB; RPC = RP - RC
-    μ = (α * β)/(α + β)
-    Kαβ = exp.(-μ .* RAB.^2)
+    # (i,k,m) = ikm; (j,l,n) = jln
+    # p = α + β
+    # RP = (α.*RA + β.*RB) ./ p
+    # RAB = RA - RB; RPA = RP - RA; RPB = RP - RB; RPC = RP - RC
+    # μ = (α * β)/(α + β)
+    # Kαβ = exp.(-μ .* RAB.^2)
+
+    hermite_expansion!(E, α, la, Ax, Ay, Az, β, lb, Bx, By, Bz)
+    Ex = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 1]
+    Ey = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 2]
+    Ez = @view E[1:la+lb+1 , 1:la+1 , 1:lb+1 , 3]
+
+    hermite_integral!(R, α, la, Ax, Ay, Az, β, lb, Bx, By, Bz, Cx, Cy, Cz)
+    R0 = @view R[1, 1:la+lb+1, 1:la+lb+1, 1:la+lb+1]
+
+    î = get_ijk(la)
+    ĵ = get_ijk(lb)
 
     vne = 0.0
-    for t = 0:i+j
-        Eij = Etij(t, i, j, Kαβ[1], RPA[1], RPB[1], p)
-        for u = 0:k+l
-            Ekl = Etij(u, k, l, Kαβ[2], RPA[2], RPB[2], p)
-            for v = 0:m+n
-                Emn = Etij(v, m, n, Kαβ[3], RPA[3], RPB[3], p)
-                vne +=  Eij * Ekl * Emn * Rtuv(t, u, v, 0, p, RPC)
+    for (b,(jx,jy,jz)) in enumerate(ĵ)
+        for (a,(ix,iy,iz)) in enumerate(î)
+            t1 = Ez[:, iz, jz] .* R0[t, u, :]
+            t2 = Ey[:, iy, jy] .* t1
+
+    for t = 0:ix+jx
+        for u = 0:iy+jz
+            Ekl = Ey[u, k, l]
+            for v = 0:iz+jz
+                Emn = Ez[v, m, n]
+                vne +=  E[t,ix,jx] * E[u,iy,jy] * E[v,iz,jz] * R[1,t, u, v]
             end
         end
     end
